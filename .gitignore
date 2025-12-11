@@ -1,0 +1,44 @@
+# --- CMake Build Folders ---
+# Ignore the entire build directory (common naming convention)
+build/
+Build/
+cmake-build-debug/
+cmake-build-release/
+out/
+
+# --- CMake Generated Files (if you build in-source) ---
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+install_manifest.txt
+Makefile
+
+# --- IDE Settings (VS Code, Visual Studio, CLion) ---
+.vscode/
+.idea/
+*.sln
+*.vcxproj
+*.vcxproj.user
+*.suo
+*.pdb
+*.idb
+*.ipch
+
+# --- Compiled Binaries & Libraries ---
+*.exe
+*.dll
+*.so
+*.dylib
+*.a
+*.lib
+*.obj
+*.o
+
+# --- Dependency Downloads (FetchContent) ---
+# If you download deps manually or via CMake into a specific folder
+_deps/
+external/
+
+# --- OS Generated Files ---
+.DS_Store
+Thumbs.db
