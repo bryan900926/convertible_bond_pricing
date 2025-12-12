@@ -1,6 +1,7 @@
 # --- CMake Build Folders ---
 # Ignore the entire build directory (common naming convention)
 build/
+build_release/
 Build/
 cmake-build-debug/
 cmake-build-release/

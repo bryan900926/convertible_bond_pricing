@@ -12,7 +12,7 @@ Eigen::ArrayXXd HullWhiteFirstStage(
     for (int i = 1; i < n; ++i)
     {
         const int j_max = i == 1 ? j_max_first : j_max_other;
-        const int dr = i == 1 ? dr_first : dr_other;
+        const double dr = i == 1 ? dr_first : dr_other;
         const int vertical = std::min(i, j_max);
         for (int j = -vertical; j <= vertical; ++j)
         {

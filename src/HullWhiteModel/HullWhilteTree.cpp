@@ -26,5 +26,6 @@ Eigen::ArrayXXd HullWhiteTree(const double kappa, const double sigma_r,
         n, j_max_first, j_max_other,
         result.alphas, r_tree);
 
-    return short_rate_tree;
+    Eigen::ArrayXXd res_rate = short_rate_tree.colwise().reverse();
+    return res_rate;
 }

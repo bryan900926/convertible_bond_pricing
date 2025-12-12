@@ -6,20 +6,6 @@
 
 #include "HullWhiteModel.h"
 
-double SafeGetProb(const Eigen::ArrayX3d &prob_mat, int row_idx, const int col_idx)
-{
-    if (row_idx < 0)
-    {
-        row_idx = 0;
-    }
-    else if (row_idx >= prob_mat.rows())
-    {
-        row_idx = prob_mat.rows() - 1;
-    }
-
-    return prob_mat(row_idx, col_idx);
-}
-
 HullWhiteAlphaResult HullWhiteTreeAlpha(int n, int non_first, int non_other, double dt_first, double dt_other, double sigma_r,
                                         double kappa, const Eigen::ArrayXd &observed_zero_rates, int jmax_first, int jmax_other)
 {
@@ -56,17 +42,27 @@ HullWhiteAlphaResult HullWhiteTreeAlpha(int n, int non_first, int non_other, dou
     q_matrix(center, 1) = 2.0 / 3.0 * exp_neg_alpha_dt;
     q_matrix(center - 1, 1) = 1.0 / 6.0 * exp_neg_alpha_dt;
 
+    Eigen::ArrayXd temp_qsum(q_rows);
+    Eigen::ArrayXd j_vec_active, q_slice, discount_factors, q_moving;
+
     for (int i = 1; i <= n - 1; ++i)
     {
+        temp_qsum.setZero();
         const double dt = dt_vec(i - 1);
         const double dr = sigma_r * std::sqrt(3.0 * dt);
+
         const Eigen::ArrayX3d &prob = (i == 1) ? prob_first : prob_other;
         const int jmax_local = (i == 1) ? jmax_first : jmax_other;
 
-        const int j_lo = std::max(-jmax_local, -i), j_hi = std::min(jmax_local, i);
-        const Eigen::ArrayXd q_vec = q_matrix(Eigen::seq(j_lo + jmax_local, j_hi + jmax_local), i);
-        const Eigen::ArrayXd j_vec = Eigen::ArrayXd::LinSpaced(j_hi - j_lo + 1, j_lo, j_hi);
-        double temp_sum = (q_vec * Eigen::exp(-j_vec * dr * dt)).sum();
+        const int j_lo = std::max(-jmax_local, -i);
+        const int j_hi = std::min(jmax_local, i);
+        const int range_len = j_hi - j_lo + 1;
+        const int row_start = j_lo + jmax_local; // Row index in q_matrix
+
+        q_slice = q_matrix.col(i).segment(row_start, range_len);
+
+        j_vec_active = Eigen::ArrayXd::LinSpaced(range_len, j_lo, j_hi);
+        double temp_sum = (q_slice * (-j_vec_active * dr * dt).exp()).sum();
 
         if (b_price_vec(i + 1) <= 0 || temp_sum <= 0)
         {
@@ -77,23 +73,29 @@ HullWhiteAlphaResult HullWhiteTreeAlpha(int n, int non_first, int non_other, dou
             alphas(i) = std::log(temp_sum / b_price_vec(i + 1)) / dt;
         }
 
-        Eigen::ArrayXd temp_qsum = Eigen::ArrayXd::Zero(q_rows);
-
         for (int j = j_lo; j <= j_hi; ++j)
         {
             const int row_from = j + jmax_local;
             const double exp_neg_alpha_j_dr_dt = std::exp(-(alphas(i) + j * dr) * dt);
             for (int k = 1; k >= -1; --k)
             {
-                const int row_to = j + k + jmax_local;
-                double probkj = SafeGetProb(prob, row_from, 1 - k);
+                int row_to = j + k + jmax_local;
+                if (row_to < 0)
+                {
+                    row_to = 0;
+                }
+                else if (row_to >= q_rows)
+                {
+                    row_to = q_rows - 1;
+                }
+                double probkj = prob(row_from, 1 - k);
                 temp_qsum(row_to) += q_matrix(row_from, i) * probkj * exp_neg_alpha_j_dr_dt;
             }
 
             if (i >= jmax_local)
             {
 
-                for (int k = j + 1; k >= j - 1; --j)
+                for (int k = j + 1; k >= j - 1; --k)
                 {
                     const int row_to = k + jmax_local;
                     if (row_to >= 0 && row_to < q_rows)

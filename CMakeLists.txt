@@ -13,6 +13,14 @@ FetchContent_Declare(
   GIT_TAG        3.4.0  # Use a stable version tag
 )
 
+if(MSVC)
+    # Windows Visual Studio (Maximum Speed)
+    add_compile_options(/O2)
+else()
+    # GCC / Clang / MinGW (Maximum Speed)
+    add_compile_options(-O3)
+endif()
+
 FetchContent_MakeAvailable(Eigen)
 
 file(GLOB_RECURSE MY_SOURCES "src/*.cpp")
