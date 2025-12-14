@@ -4,7 +4,15 @@
 
 Eigen::ArrayX3d ProbCalc(int non, int j_max, double dt, int kappa);
 
-Eigen::ArrayXd VasciekZeroRates(const std::array<double, 4> &params, const Eigen::ArrayXd &maturities);
+struct VasciekParas
+{
+    double kappa;
+    double r_bar;
+    double sigma_r;
+    double r0;
+};
+
+Eigen::ArrayXd VasciekZeroRates(const VasciekParas &params, const Eigen::ArrayXd &maturities);
 
 Eigen::ArrayX3d ProbCalcV2(int non, int j_max, int n, const Eigen::ArrayX3d &prob_mat);
 
@@ -26,8 +34,27 @@ HullWhiteAlphaResult HullWhiteTreeAlpha(
     double kappa, const Eigen::ArrayXd &observed_zero_rates,
     int jmax_first, int jmax_other);
 
-Eigen::ArrayXXd HullWhiteTree(const double kappa, const double sigma_r,
-                     const Eigen::ArrayXd &zero_rates, const double dt_first, const double dt_other);
+struct HullWhiteTreeResult
+{
+    const Eigen::ArrayXXd short_rate_tree;
+    const HullWhiteAlphaResult alpha_result;
+    const int j_max_first;
+    const int j_max_other;
+};
+
+HullWhiteTreeResult HullWhiteTree(const double kappa, const double sigma_r,
+                                  const Eigen::ArrayXd &zero_rates, const double dt_first, const double dt_other);
 
 Eigen::ArrayXXd HullWhiteTreeShortRate(const int n, const int j_max_first, const int j_max_other,
                                        const Eigen::ArrayXd &alphas, const Eigen::ArrayXXd &r_tree);
+
+struct PzTreeResult
+{
+    std::vector<Eigen::ArrayX3i> nxt_idx_mat; // [Time] -> (Node -> {Down, Mid, Up})
+    int start_h = -1;                         // Initialize with invalid value to detect errors
+};
+
+PzTreeResult PzTreeBuild(
+    const Eigen::ArrayXXd &hw_tree,
+    int n,
+    int jmax_other);

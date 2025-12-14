@@ -2,17 +2,42 @@
 #include <chrono>
 #include <Eigen/Dense>
 #include "src/HullWhiteModel/HullWhiteModel.h"
+#include "src/Pricing/CbModel.h"
 
 int main()
 {
-    auto start = std::chrono::steady_clock::now();
-    Eigen::ArrayXd time_grid = Eigen::ArrayXd::LinSpaced(10, 0.1, 1);
-    double dt_first = time_grid(0), dt_other = time_grid(1) - time_grid(0), sigma_r = 0.01, kappa = 0.1, r_bar = 0.05, r0 = 0.03;
-    Eigen::ArrayXd zero_rates = VasciekZeroRates({kappa, r_bar, sigma_r, r0}, time_grid);
-    auto tree =  HullWhiteTree(kappa, sigma_r, zero_rates, dt_first, dt_other);
-    std::cout << "Hull-White Short Rate Tree:\n" << tree << std::endl;
-    auto end = std::chrono::steady_clock::now();
-    std::chrono::duration<double> duration = end - start;
-    std::cout << "Time taken: " << duration.count() << " seconds" << std::endl;
+    CbParas cb_paras = {
+        1.0,        // T
+        0.1,        // sigma_V
+        100.0,      // F
+        0.4,        // rr
+        0.05,       // CR
+        100,        // NS
+        100,        // NC
+        1,          // CP
+        20,       // qdt
+        0,        // rho
+        20,         // partition
+        false,       // if_const_r
+        0.06,       // coupon_rate
+        0.25,       // dt_other
+        1           // paid_cycle
+    };
+    CdgParas cdg_paras = {
+        0.18,    // lamda
+        0,    // phi
+        -0.3,  // l0
+        4550000,  // V0
+        0.005,   // delta
+        0.1,    // sigma_v
+        0.6,   // v
+    };
+    VasciekParas vasciek_paras = {
+        0.1,    // kappa
+        0.05,   // r_bar
+        0.01,   // sigma_r
+        0.05    // r0
+    };
+    CbTreePricing(cb_paras, cdg_paras, vasciek_paras);
     return 0;
 }

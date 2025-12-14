@@ -3,6 +3,7 @@
 #include <Eigen/Dense>
 #include <iostream>
 #include <cmath>
+#include <utility>
 
 #include "HullWhiteModel.h"
 
@@ -13,7 +14,7 @@ HullWhiteAlphaResult HullWhiteTreeAlpha(int n, int non_first, int non_other, dou
     const Eigen::ArrayX3d prob_other = ProbCalc(non_other, jmax_other, dt_other, kappa);
 
     Eigen::ArrayXd alphas(n);
-    const int q_rows = non_first;
+    const int q_rows = std::max(non_other, non_first);
     Eigen::ArrayXXd q_matrix = Eigen::ArrayXXd::Zero(q_rows, n + 2);
     Eigen::ArrayXd b_price_vec = Eigen::ArrayXXd::Zero(n + 2, 1);
 
@@ -45,11 +46,14 @@ HullWhiteAlphaResult HullWhiteTreeAlpha(int n, int non_first, int non_other, dou
     Eigen::ArrayXd temp_qsum(q_rows);
     Eigen::ArrayXd j_vec_active, q_slice, discount_factors, q_moving;
 
+    const double dr_first = sigma_r * std::sqrt(3.0 * dt_first);
+    const double dr_other = sigma_r * std::sqrt(3.0 * dt_other);
+
     for (int i = 1; i <= n - 1; ++i)
     {
         temp_qsum.setZero();
         const double dt = dt_vec(i - 1);
-        const double dr = sigma_r * std::sqrt(3.0 * dt);
+        const double dr = (i == 1) ? dr_first : dr_other;
 
         const Eigen::ArrayX3d &prob = (i == 1) ? prob_first : prob_other;
         const int jmax_local = (i == 1) ? jmax_first : jmax_other;
@@ -133,5 +137,5 @@ HullWhiteAlphaResult HullWhiteTreeAlpha(int n, int non_first, int non_other, dou
         }
         thetas(n - 1) = (alphas(n - 1) - alphas(n - 2)) / dt_vec(n - 2) - kappa * alphas(n - 1);
     }
-    return {prob_first_final, prob_other_final, alphas, thetas};
+    return {std::move(prob_first_final), std::move(prob_other_final), std::move(alphas), std::move(thetas)};
 }

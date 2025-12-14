@@ -2,12 +2,12 @@
 #include <Eigen/Dense>
 #include <array>
 
-Eigen::ArrayXd VasciekZeroRates(const std::array<double, 4> &params, const Eigen::ArrayXd &maturities)
+Eigen::ArrayXd VasciekZeroRates(const VasciekParas &params, const Eigen::ArrayXd &maturities)
 {
-    const double kappa = params[0];
-    const double r_bar = params[1];
-    const double sigma_r = params[2];
-    const double r0 = params[3];
+    const double kappa = params.kappa;
+    const double r_bar = params.r_bar;
+    const double sigma_r = params.sigma_r;
+    const double r0 = params.r0;
     const double sigma_r_sq = sigma_r * sigma_r;
     const double kappa_sq = kappa * kappa;
 

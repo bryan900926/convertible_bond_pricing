@@ -1,10 +1,13 @@
 #include <Eigen/Dense>
 #include <iostream>
+#include <utility>
 
 #include "HullWhiteModel.h"
 
-Eigen::ArrayXXd HullWhiteTree(const double kappa, const double sigma_r,
-                              const Eigen::ArrayXd &zero_rates, const double dt_first, const double dt_other)
+
+
+HullWhiteTreeResult HullWhiteTree(const double kappa, const double sigma_r,
+                                  const Eigen::ArrayXd &zero_rates, const double dt_first, const double dt_other)
 {
     const int j_max_first = std::ceil(0.1835 / (kappa * dt_first));
     const int j_max_other = std::ceil(0.1835 / (kappa * dt_other));
@@ -16,7 +19,7 @@ Eigen::ArrayXXd HullWhiteTree(const double kappa, const double sigma_r,
 
     Eigen::ArrayXXd r_tree = HullWhiteFirstStage(n, sigma_r, j_max_first, j_max_other, dt_first, dt_other);
 
-    HullWhiteAlphaResult result = HullWhiteTreeAlpha(
+    HullWhiteAlphaResult alphaResult = HullWhiteTreeAlpha(
         n, non_first, non_other,
         dt_first, dt_other, sigma_r,
         kappa, zero_rates,
@@ -24,8 +27,9 @@ Eigen::ArrayXXd HullWhiteTree(const double kappa, const double sigma_r,
 
     Eigen::ArrayXXd short_rate_tree = HullWhiteTreeShortRate(
         n, j_max_first, j_max_other,
-        result.alphas, r_tree);
+        alphaResult.alphas, r_tree);
 
-    Eigen::ArrayXXd res_rate = short_rate_tree.colwise().reverse();
-    return res_rate;
+    Eigen::ArrayXXd short_rate = short_rate_tree.colwise().reverse();
+
+    return {std::move(short_rate), std::move(alphaResult)};
 }
