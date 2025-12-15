@@ -50,11 +50,10 @@ Eigen::ArrayXXd HullWhiteTreeShortRate(const int n, const int j_max_first, const
 
 struct PzTreeResult
 {
-    std::vector<Eigen::ArrayX3i> nxt_idx_mat; // [Time] -> (Node -> {Down, Mid, Up})
-    int start_h = -1;                         // Initialize with invalid value to detect errors
+    Eigen::ArrayX3i nxt_r_idx; // [Time] -> (Node -> {Down, Mid, Up})
+    int start_h = -1;          // Initialize with invalid value to detect errors
 };
 
 PzTreeResult PzTreeBuild(
-    const Eigen::ArrayXXd &hw_tree,
     int n,
-    int jmax_other);
+    HullWhiteTreeResult &tree_result);

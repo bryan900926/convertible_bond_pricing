@@ -3,6 +3,7 @@
 #include <Eigen/Dense>
 #include "src/HullWhiteModel/HullWhiteModel.h"
 #include "src/Pricing/CbModel.h"
+#include "src/Equity/EquityModel.h"
 
 int main()
 {
@@ -12,7 +13,7 @@ int main()
         100.0,      // F
         0.4,        // rr
         0.05,       // CR
-        100,        // NS
+        36000,        // NS
         100,        // NC
         1,          // CP
         20,       // qdt
@@ -20,7 +21,7 @@ int main()
         20,         // partition
         false,       // if_const_r
         0.06,       // coupon_rate
-        0.25,       // dt_other
+        1.0/5,       // dt_other
         1           // paid_cycle
     };
     CdgParas cdg_paras = {
@@ -38,6 +39,22 @@ int main()
         0.01,   // sigma_r
         0.05    // r0
     };
+    auto start = std::chrono::high_resolution_clock::now();
     CbTreePricing(cb_paras, cdg_paras, vasciek_paras);
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> duration = end - start;
+    std::cout << "Pricing took: " << duration.count() << " seconds\n";
+    // auto v = CalculateEquityNode(
+    //     100.0,   // v_t
+    //     -0.3,    // l_t
+    //     0.05,    // r_t
+    //     0.2,     // dt
+    //     0.04,    // theta_t
+    //     0.045,   // theta_t1
+    //     cb_paras,
+    //     cdg_paras,
+    //     vasciek_paras,
+    //     compute_gauss_hermite_rule(cb_paras.qdt)
+    // );
     return 0;
 }

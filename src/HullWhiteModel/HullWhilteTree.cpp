@@ -31,5 +31,5 @@ HullWhiteTreeResult HullWhiteTree(const double kappa, const double sigma_r,
 
     Eigen::ArrayXXd short_rate = short_rate_tree.colwise().reverse();
 
-    return {std::move(short_rate), std::move(alphaResult)};
+    return {std::move(short_rate), std::move(alphaResult), j_max_first, j_max_other};
 }

@@ -1,57 +1,41 @@
 #include <Eigen/Dense>
 #include <vector>
 #include <algorithm> // For std::clamp or min/max
+#include <iostream>
 
 #include "HullWhiteModel.h"
 
-
 PzTreeResult PzTreeBuild(
-    const Eigen::ArrayXXd &hw_tree,
     int n,
-    int jmax_other)
+    HullWhiteTreeResult &tree_result)
 {
-    const int grid_height = static_cast<int>(hw_tree.rows());
-
-    PzTreeResult result;
-    result.nxt_idx_mat.resize(n); // Allocate vector slots for time steps
-
-    Eigen::ArrayXi j_vec = Eigen::ArrayXi::LinSpaced(grid_height, 0, grid_height - 1);
-
-    for (int i = 0; i < n; ++i)
+    Eigen::ArrayX3i nxt_idx = Eigen::ArrayX3i::Zero(tree_result.short_rate_tree.rows(), 3);
+    const double j_max_other = static_cast<double>(tree_result.j_max_other);
+    int start_h = -1;
+    for (int j = 0; j < 2 * n + 1; ++j)
     {
-        result.nxt_idx_mat[i].resize(grid_height, 3);
-
-        Eigen::ArrayX3i &step_mat = result.nxt_idx_mat[i];
-
-        step_mat.col(0) = j_vec - 1;
-        step_mat.col(1) = j_vec;
-        step_mat.col(2) = j_vec + 1;
-
-        int upper_idx = std::min(grid_height - 1, n + jmax_other); // Safety clamp
-        if (upper_idx < grid_height)
+        if (tree_result.short_rate_tree(j, 0) != 0.0)
         {
-            step_mat(upper_idx, 0) = upper_idx - 2;
-            step_mat(upper_idx, 1) = upper_idx - 1;
-            step_mat(upper_idx, 2) = upper_idx;
+            start_h = j;
         }
-
-        int lower_idx = std::max(0, n - jmax_other); // Safety clamp
-        if (lower_idx >= 0)
+        if (j == n - j_max_other)
         {
-            step_mat(lower_idx, 0) = lower_idx;
-            step_mat(lower_idx, 1) = lower_idx + 1;
-            step_mat(lower_idx, 2) = lower_idx + 2;
+            nxt_idx(j, 0) = j;
+            nxt_idx(j, 1) = j + 1;
+            nxt_idx(j, 2) = j + 2;
+        }
+        else if (j == n + j_max_other)
+        {
+            nxt_idx(j, 0) = j - 2;
+            nxt_idx(j, 1) = j - 1;
+            nxt_idx(j, 2) = j;
+        }
+        else
+        {
+            nxt_idx(j, 0) = j - 1;
+            nxt_idx(j, 1) = j;
+            nxt_idx(j, 2) = j + 1;
         }
     }
-
-    for (int j = 0; j < grid_height; ++j)
-    {
-        if (hw_tree(j, 0) != 0)
-        {
-            result.start_h = j;
-            break;
-        }
-    }
-
-    return result; // RVO (Return Value Optimization) makes this copy-free
+    return {std::move(nxt_idx), start_h};
 }
