@@ -2,7 +2,7 @@
 #include <vector>
 #include <Eigen/Dense>
 
-Eigen::ArrayX3d ProbCalc(int non, int j_max, double dt, int kappa)
+Eigen::ArrayX3d ProbCalc(int non, int j_max, double dt, double kappa)
 {
     Eigen::ArrayX3d probs(non, 3);
 
