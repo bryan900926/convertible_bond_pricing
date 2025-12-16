@@ -70,8 +70,15 @@ void EquityTreeBuild(const std::vector<std::array<double, 5>> &l_data,
                 continue;
             }
             // Calculate the equity value for each partition
-            equity_tree(h, p) = CalculateEquityNode(v_t, l_vec(p), r_t, dt, theta_t, theta_t1, cb_paras, cdg_paras, vasciek_paras, gh_rule) / cb_paras.NS;
-            std::cout << "partition " << p << ": " << equity_tree(h, p) << std::endl;
+            equity_tree(h, p) = CalculateEquityNode(v_t, l_vec(p), r_t, dt, theta_t * vasciek_paras.kappa, theta_t1 * vasciek_paras.kappa, cb_paras, cdg_paras, vasciek_paras, gh_rule) / cb_paras.NS;
+        }
+        if (h < 30)
+        {
+            std::cout << "Step: " << l_data[h][0] - 1 << ", Node: " << h
+                      << ", l_t: " << l_min
+                      << ", r_t: " << r_t
+                      << ", v_t: " << v_t << std::endl
+                      << ", Equitys: " << equity_tree(h, 0) << std::endl;
         }
     } // tree is for later calculation
 }

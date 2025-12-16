@@ -29,7 +29,7 @@ void CbTreePricing(const CbParas &cb_paras, const CdgParas &cdg_paras, const Vas
         coupon_info.dt_first,
         cb_paras.dt_other);
 
-    PzTreeResult pz_result = PzTreeBuild(
+        PzTreeResult pz_result = PzTreeBuild(
         coupon_info.total_steps,
         tree_result);
 

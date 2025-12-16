@@ -1,7 +1,6 @@
 #include <array>
 #include <vector>
 #include <Eigen/Dense>
-#include <iostream>
 #include <cmath>
 #include <utility>
 
@@ -15,6 +14,7 @@ HullWhiteAlphaResult HullWhiteTreeAlpha(int n, int non_first, int non_other, dou
 
     Eigen::ArrayXd alphas(n);
     const int q_rows = std::max(non_other, non_first);
+
     Eigen::ArrayXXd q_matrix = Eigen::ArrayXXd::Zero(q_rows, n + 2);
     Eigen::ArrayXd b_price_vec = Eigen::ArrayXXd::Zero(n + 2, 1);
 
@@ -60,13 +60,13 @@ HullWhiteAlphaResult HullWhiteTreeAlpha(int n, int non_first, int non_other, dou
 
         const int j_lo = std::max(-jmax_local, -i);
         const int j_hi = std::min(jmax_local, i);
-        const int range_len = j_hi - j_lo + 1;
-        const int row_start = j_lo + jmax_local; // Row index in q_matrix
 
-        q_slice = q_matrix.col(i).segment(row_start, range_len);
-
-        j_vec_active = Eigen::ArrayXd::LinSpaced(range_len, j_lo, j_hi);
-        double temp_sum = (q_slice * (-j_vec_active * dr * dt).exp()).sum();
+        double temp_sum = 0;
+        for (int j = j_lo; j <= j_hi; ++j)
+        {
+            int row_idx = j + jmax_local;
+            temp_sum += q_matrix(row_idx, i) * std::exp(-j * dr * dt);
+        }
 
         if (b_price_vec(i + 1) <= 0 || temp_sum <= 0)
         {
@@ -111,8 +111,11 @@ HullWhiteAlphaResult HullWhiteTreeAlpha(int n, int non_first, int non_other, dou
         }
         if (i < jmax_local)
         {
-            auto row_to_vec = Eigen::seq(-(i + 1) + jmax_local, i + 1 + jmax_local);
-            q_matrix(row_to_vec, i + 1) = temp_qsum(row_to_vec);
+            for (int k = i + 1; k >= -i - 1; --k)
+            {
+                const int row_to = k + jmax_local;
+                q_matrix(row_to, i + 1) = temp_qsum(row_to);
+            }
         }
     }
 

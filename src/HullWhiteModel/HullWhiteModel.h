@@ -2,7 +2,7 @@
 #include <Eigen/Dense>
 #include <array>
 
-Eigen::ArrayX3d ProbCalc(int non, int j_max, double dt, int kappa);
+Eigen::ArrayX3d ProbCalc(int non, int j_max, double dt, double kappa);
 
 struct VasciekParas
 {
