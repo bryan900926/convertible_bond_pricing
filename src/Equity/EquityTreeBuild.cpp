@@ -15,8 +15,6 @@ void EquityTreeBuild(const std::vector<std::array<double, 5>> &l_data,
 
     const GaussHermiteResult gh_rule = compute_gauss_hermite_rule(cb_paras.qdt);
 
-    const int cols = l_data[0].size() + cb_paras.partition - 2;
-    Eigen::ArrayXXd equity_tree = Eigen::ArrayXXd::Zero(l_data.size(), cols);
     const Eigen::ArrayXd ratio_min_vec = Eigen::ArrayXd::LinSpaced(
         cb_paras.partition,
         1.0,
@@ -32,7 +30,12 @@ void EquityTreeBuild(const std::vector<std::array<double, 5>> &l_data,
     const double sigma_x = cdg_paras.sigma_v * std::sqrt(1 - cb_paras.rho * cb_paras.rho);
     const double jump_first = sigma_x * std::sqrt(coupon_info.dt_first);
     const double jump_other = sigma_x * std::sqrt(cb_paras.dt_other);
-    Eigen::ArrayXXd l_data_partition = Eigen::ArrayXXd::Zero(l_data.size(), equity_tree.cols());
+
+    Eigen::ArrayXXd l_data_partition = Eigen::ArrayXXd::Zero(l_data.size(), cb_paras.partition);
+    Eigen::ArrayXXd v_data_partition = Eigen::ArrayXXd::Zero(l_data.size(), cb_paras.partition);
+    Eigen::ArrayXXd r_data_partition = Eigen::ArrayXXd::Zero(l_data.size(), cb_paras.partition);
+    Eigen::ArrayXXd theta_data_partition = Eigen::ArrayXXd::Zero(l_data.size(), cb_paras.partition);
+    Eigen::ArrayXXd theta1_data_partition = Eigen::ArrayXXd::Zero(l_data.size(), cb_paras.partition);
     for (int h = 0; h < l_data.size(); ++h)
     {
         if (h == 0)
@@ -62,20 +65,23 @@ void EquityTreeBuild(const std::vector<std::array<double, 5>> &l_data,
         const double x_t = x0 + l_data[h][1] * jump;
         const double v_t = std::exp(y0 + (x_t - x0) + cdg_paras.sigma_v * cb_paras.rho * (r_t - vasciek_paras.r0) / vasciek_paras.sigma_r);
         lt_tree(h, Eigen::all) = l_vec.transpose();
-        for (int p = 0; p < cb_paras.partition; ++p)
-        {
-            if (l_vec(p) >= 0)
-            {
-                equity_tree(h, p) = 0.0;
-                continue;
-            }
-            // Calculate the equity value for each partition
-            equity_tree(h, p) = CalculateEquityNode(v_t, l_vec(p), r_t, dt, theta_t * vasciek_paras.kappa, theta_t1 * vasciek_paras.kappa, cb_paras, cdg_paras, vasciek_paras, gh_rule) / cb_paras.NS;
-        }
-        std::cout << "Step: " << l_data[h][0] - 1 << ", Node: " << h
-                  << ", l_t: " << l_min
-                  << ", r_t: " << r_t
-                  << ", v_t: " << v_t << std::endl
-                  << ", Equitys: " << equity_tree(h, 0) << std::endl;
-    } // tree is for later calculation
+
+        v_data_partition.row(h).segment(0, cb_paras.partition).setConstant(v_t);
+        r_data_partition.row(h).segment(0, cb_paras.partition).setConstant(r_t);
+        theta_data_partition.row(h).segment(0, cb_paras.partition).setConstant(theta_t);
+        theta1_data_partition.row(h).segment(0, cb_paras.partition).setConstant(theta_t1);
+    }
+    const EquityContext ctx = EquityContextVec(
+        dt,
+        v_data_partition,
+        l_data_partition,
+        r_data_partition,
+        theta_data_partition,
+        theta1_data_partition,
+        cb_paras,
+        cdg_paras,
+        vasciek_paras);
+    auto equity_tree = EquityFunVec(
+        cb_paras,
+        ctx);
 }
