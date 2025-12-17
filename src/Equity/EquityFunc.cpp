@@ -87,7 +87,7 @@ double CalculateEquityNode(
     // --- 10. Cxy ---
     const double term_Cxy_1 = ld * b * sigma_r_sq / ((ld - K) * K) * (Bk_dt - B_ld_dt - Bk_2dt + B_ld_plusK_dt);
     const double term_Cxy_2 = sigma_v * sigma_r * rho / K * (B_ld_dt - B_ld_plusK_dt);
-    const double term_Cxy_3 = ld * b * sigma_v * sigma_r * rho / (ld - K) * (Bk_dt - B_ld_dt);
+    const double term_Cxy_3 = ld * b * sigma_v * sigma_r * rho / (ld - K) * (Bk_dt - Bk_ld_dt);
     const double term_Cxy_4 = sigma_v_sq * Bk_ld_dt;
 
     const double Cxy = term_Cxy_1 - term_Cxy_2 + term_Cxy_3 - term_Cxy_4;
