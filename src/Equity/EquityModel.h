@@ -6,7 +6,7 @@
 
 double FormulaFastScalar(double M, double N, double Cxx, double Cyy, double corr_xy, const Eigen::ArrayXd &e_arr, const Eigen::ArrayXd &w_arr);
 
-inline double Calc_Bk(double k, double t);
+double Calc_Bk(double k, double t);
 
 struct GaussHermiteResult
 {
@@ -23,38 +23,46 @@ double CalculateEquityNode(
     const CdgParas &cdg_paras,
     const VasciekParas &vp,
     const GaussHermiteResult &gh_rule);
-
-void EquityTreeBuild(const std::vector<std::array<double, 5>> &l_data,
-                     const HullWhiteTreeResult &tree_result,
-                     const CbParas &cb_paras,
-                     const CdgParas &cdg_paras,
-                     const VasciekParas &vasciek_paras,
-                     const CouponPaidInfo &coupon_info);
-
 struct EquityContext
 {
     const double c_xx;
     const double c_yy;
     const double c_xy;
     const double corr_xy;
-    const Eigen::ArrayXd m_arr;
-    const Eigen::ArrayXd n_arr;
+    const Eigen::ArrayXXd m_arr;
+    const Eigen::ArrayXXd n_arr;
+    const Eigen::ArrayXd pt_arr;
 };
 
 EquityContext EquityContextVec(
-    double dt,
-    Eigen::ArrayXXd &v_t_arr,
-    Eigen::ArrayXXd &l_t_arr,
-    Eigen::ArrayXXd &r_t_arr,
-    Eigen::ArrayXXd &theta_t_arr,
-    Eigen::ArrayXXd &theta_t1_arr,
-    const CbParas &cb_paras, const CdgParas &cdg_paras,
+    const double dt,
+    const Eigen::ArrayXXd &l_t_arr,
+    const Eigen::ArrayXd &r_t_arr,
+    const Eigen::ArrayXd &theta_t_arr,
+    const Eigen::ArrayXd &theta_t1_arr,
+    const CbParas &cb_paras,
+    const CdgParas &cdg_paras,
     const VasciekParas &vp);
-
-Eigen::ArrayXXd FormulaFastVec(
-    const double x,
-    const EquityContext &ctx);
 
 Eigen::ArrayXXd EquityFunVec(
     const CbParas &cb_paras,
-    const EquityContext &ctx);
+    const EquityContext &ctx,
+    const Eigen::ArrayXd &v_t_arr);
+
+struct EquityTreeBuildResult
+{
+    const Eigen::ArrayXXd &equity_tree;
+    const Eigen::ArrayX3i &idx_vec;
+    const Eigen::ArrayXi &nxt_m;
+    const Eigen::Array<int, Eigen::Dynamic, 9> &nxt_p;
+    const Eigen::ArrayXXd &l_data_partition;
+};
+
+EquityTreeBuildResult EquityTreeBuild(const std::vector<LNode> &l_data,
+                                      const HullWhiteTreeResult &tree_result,
+                                      const CbParas &cb_paras,
+                                      const CdgParas &cdg_paras,
+                                      const std::vector<PNode> &next_p_data,
+                                      const std::vector<MNode> &next_m_data,
+                                      const VasciekParas &vasciek_paras,
+                                      const CouponPaidInfo &coupon_info);

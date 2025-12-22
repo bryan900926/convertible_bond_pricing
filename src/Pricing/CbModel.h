@@ -34,6 +34,30 @@ struct CdgParas
     double v;
 };
 
+struct LNode
+{
+    size_t step;
+    size_t k;
+    int m;
+    double l_min;
+    double l_max;
+};
+
+struct PNode
+{
+    size_t step;
+    size_t k;
+    int m;
+    double prob_matrix[3][3];
+};
+
+struct MNode
+{
+    size_t step;
+    size_t k;
+    int m;
+    int nxt_m;
+};
 
 struct CouponPaidInfo
 {

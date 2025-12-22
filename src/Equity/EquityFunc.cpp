@@ -1,4 +1,5 @@
 #include <cmath>
+#include <iostream>
 
 #include "..\Pricing\CbModel.h"
 #include "..\HullWhiteModel\HullWhiteModel.h"

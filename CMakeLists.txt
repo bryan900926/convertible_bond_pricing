@@ -22,4 +22,15 @@ add_executable(convertible_bond
     ${MY_SOURCES}
 )
 
+add_compile_options(-Wall -Wextra -Wpedantic)
+
+#debug profiling with gprof
+if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+    message(STATUS "Enabling Gprof profiling")
+    
+    target_compile_options(convertible_bond PRIVATE -pg)
+    
+    target_link_options(convertible_bond PRIVATE -pg -no-pie)
+endif()
+
 target_link_libraries(convertible_bond PRIVATE Eigen3::Eigen)
