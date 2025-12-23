@@ -24,6 +24,7 @@ Makefile
 *.pdb
 *.idb
 *.ipch
+.cache
 
 # --- Compiled Binaries & Libraries ---
 *.exe

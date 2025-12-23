@@ -1,7 +1,4 @@
-#include <vector>
 #include <cmath>
-#include <iomanip>
-#include <functional>
 #include <Eigen/Dense>
 
 #include "EquityModel.h"

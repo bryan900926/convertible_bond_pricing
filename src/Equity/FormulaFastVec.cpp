@@ -1,5 +1,4 @@
 #include <Eigen/Dense>
-#include <iostream>
 #include <unsupported/Eigen/SpecialFunctions>
 #include <cmath>
 #include "EquityModel.h"

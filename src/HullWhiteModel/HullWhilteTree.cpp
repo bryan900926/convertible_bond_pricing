@@ -1,5 +1,4 @@
 #include <Eigen/Dense>
-#include <iostream>
 #include <utility>
 
 #include "HullWhiteModel.h"

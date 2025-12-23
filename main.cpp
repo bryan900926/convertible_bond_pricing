@@ -1,9 +1,6 @@
-#include <iostream>
-#include <chrono>
 #include <Eigen/Dense>
 #include "src/HullWhiteModel/HullWhiteModel.h"
 #include "src/Pricing/CbModel.h"
-#include "src/Equity/EquityModel.h"
 #include "src/Util/Timer.h"
 
 int main()
@@ -23,7 +20,7 @@ int main()
         20,      // partition
         false,  // if_const_r
         0.06,    // coupon_rate
-        1.0 / 144, // dt_other
+        1.0 / 2, // dt_other
         1        // paid_cycle
     };
     CdgParas cdg_paras = {

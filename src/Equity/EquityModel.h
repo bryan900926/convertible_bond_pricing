@@ -51,11 +51,11 @@ Eigen::ArrayXXd EquityFunVec(
 
 struct EquityTreeBuildResult
 {
-    const Eigen::ArrayXXd &equity_tree;
-    const Eigen::ArrayX3i &idx_vec;
-    const Eigen::ArrayXi &nxt_m;
-    const Eigen::Array<int, Eigen::Dynamic, 9> &nxt_p;
-    const Eigen::ArrayXXd &l_data_partition;
+    const Eigen::ArrayXXd equity_tree;
+    const Eigen::ArrayX3i idx_vec;
+    const Eigen::ArrayXi nxt_m;
+    const Eigen::Array<double, Eigen::Dynamic, 9> nxt_p;
+    const Eigen::ArrayXXd l_data_partition;
 };
 
 EquityTreeBuildResult EquityTreeBuild(const std::vector<LNode> &l_data,
