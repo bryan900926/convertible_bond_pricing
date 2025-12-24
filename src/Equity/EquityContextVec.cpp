@@ -1,10 +1,9 @@
-#include "Eigen/Dense"
-
-
 #include "..\HullWhiteModel\HullWhiteModel.h"
 #include "..\Pricing\CbModel.h"
+#include "Eigen/Dense"
 #include "EquityModel.h"
-
+#include <algorithm>
+#include <iostream>
 
 EquityContext EquityContextVec(const double dt, const Eigen::ArrayXXd &l_t_arr,
                                const Eigen::ArrayXd &r_t_arr,
@@ -103,9 +102,9 @@ EquityContext EquityContextVec(const double dt, const Eigen::ArrayXXd &l_t_arr,
   if (c_yy < 0 || c_xx < 0)
     throw std::runtime_error("Negative variance");
 
-  const double corr_xy = c_xy / std::sqrt(c_xx * c_yy);
-  if (std::abs(corr_xy) > 1.0)
-    throw std::runtime_error("Correlation out of bounds");
+  double corr_xy = c_xy / std::sqrt(c_xx * c_yy);
+
+  corr_xy = std::max(-1.0, std::min(1.0, corr_xy));
 
   const double b_k_square_integral =
       (2 * vp.kappa * dt - std::exp(-2 * vp.kappa * dt) +

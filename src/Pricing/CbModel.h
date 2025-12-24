@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "..\HullWhiteModel\HullWhiteModel.h"
+#include "Eigen/src/Core/Array.h"
 
 struct CbParas {
   double T;
@@ -88,3 +89,20 @@ void CbTreeBuild(const CbParas &cb_paras, const CdgParas &cdg_paras,
                  const CouponPaidInfo &coupon_info,
                  const PzTreeResult &pz_result,
                  const std::vector<int> &num_node_steps);
+
+void FillMap(Eigen::ArrayXi &map, const int step,
+             const Eigen::ArrayX3i &idx_vec,
+             const std::vector<int> &cum_node_steps,
+             const std::vector<int> &num_node_steps, const int m_idx_offset,
+             const int cols);
+
+Eigen::ArrayXd DoInterp(const Eigen::ArrayXd &val1, const Eigen::ArrayXd &val2,
+                        const Eigen::ArrayXd &weight);
+
+void CbTreeBuildMemoSave(const CbParas &cb_paras, const CdgParas &cdg_paras,
+                         const VasciekParas &vasciek_paras,
+                         const EquityTreeBuildResult &equity_tree_result,
+                         const HullWhiteTreeResult &tree_result,
+                         const CouponPaidInfo &coupon_info,
+                         const PzTreeResult &pz_result,
+                         const std::vector<int> &num_node_steps);

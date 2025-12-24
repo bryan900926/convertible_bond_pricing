@@ -1,6 +1,5 @@
 #pragma once // Prevents this file from being included twice
 #include <Eigen/Dense>
-#include <array>
 
 Eigen::ArrayX3d ProbCalc(int non, int j_max, double dt, double kappa);
 

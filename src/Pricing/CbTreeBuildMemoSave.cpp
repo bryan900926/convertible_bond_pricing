@@ -6,7 +6,7 @@
 #include "Eigen/src/Core/Array.h"
 #include "Eigen/src/Core/util/Constants.h"
 
-void CbTreeBuild(const CbParas &cb_paras, const CdgParas &cdg_paras,
+void CbTreeBuildMemoSave(const CbParas &cb_paras, const CdgParas &cdg_paras,
                  const VasciekParas &vasciek_paras,
                  const EquityTreeBuildResult &equity_tree_result,
                  const HullWhiteTreeResult &tree_result,
@@ -35,9 +35,11 @@ void CbTreeBuild(const CbParas &cb_paras, const CdgParas &cdg_paras,
   std::vector<int> cum_node_steps(num_node_steps.size(), 0);
   cum_node_steps[0] = num_node_steps[0];
 
+  int max_nodes = 0;
   for (size_t i = 1; i < num_node_steps.size(); ++i) {
     cum_node_steps[i] =
         cum_node_steps[i - 1] + num_node_steps[i]; // [1, 3, 7,...]
+    max_nodes = std::max(max_nodes, num_node_steps[i]);
   }
 
   const int m_idx_offset = idx_vec.col(1).abs().maxCoeff();
@@ -50,40 +52,6 @@ void CbTreeBuild(const CbParas &cb_paras, const CdgParas &cdg_paras,
   FillMap(map_next, n, idx_vec, cum_node_steps, num_node_steps, m_idx_offset,
           cols);
 
-  Eigen::ArrayXXd l_next = l_data.middleRows(
-      cum_node_steps[cum_node_steps.size() - 2], num_node_steps[n]);
-  Eigen::ArrayXXd s_next = equity_tree.middleRows(
-      cum_node_steps[cum_node_steps.size() - 2], num_node_steps[n]);
-
-  Eigen::ArrayXXd b_next =
-      Eigen::ArrayXXd::Zero(l_next.rows(), cb_paras.partition);
-  Eigen::ArrayXXd cb_next =
-      Eigen::ArrayXXd::Zero(l_next.rows(), cb_paras.partition);
-  Eigen::ArrayXXd dil_s_next =
-      Eigen::ArrayXXd::Zero(l_next.rows(), cb_paras.partition);
-  Eigen::ArrayXXd equity_next = s_next;
-
-  const auto is_nan = l_next.isNaN();
-  const auto is_pos = l_next > 0.0;
-  const auto is_neg = !is_pos;
-  const auto is_valid = !is_nan && !is_pos;
-  const auto low_f = (cb_paras.CR * s_next) < cb_paras.F;
-  const auto no_convert = is_valid && low_f;
-  const auto convert = is_valid && !no_convert;
-
-  dil_s_next = is_nan.select(NaN, dil_s_next);
-  b_next = is_pos.select(cb_paras.F * cb_paras.rr, b_next);
-  cb_next = is_pos.select(cb_paras.F * cb_paras.rr * (-l_next).exp(), cb_next);
-  cb_next = no_convert.select(cb_paras.F, cb_next);
-  dil_s_next = no_convert.select(s_next, dil_s_next);
-
-  const Eigen::ArrayXXd conv_val =
-      (s_next * cb_paras.NS + cb_paras.NC * cb_paras.F) /
-      (cb_paras.CR * cb_paras.NC + cb_paras.NS);
-  dil_s_next = convert.select(s_next.min(conv_val), dil_s_next);
-  cb_next = convert.select((dil_s_next * cb_paras.CR).max(cb_paras.F), cb_next);
-  b_next = is_neg.select(cb_paras.F * (1 + cb_paras.coupon_rate), b_next);
-
   Eigen::ArrayXd dm_vec(9);
   dm_vec << -2, -2, -2, 0, 0, 0, 2, 2, 2;
 
@@ -92,30 +60,119 @@ void CbTreeBuild(const CbParas &cb_paras, const CdgParas &cdg_paras,
           cdg_paras.lamda -
       cdg_paras.v + cdg_paras.phi * vasciek_paras.r_bar;
 
+  Eigen::ArrayXd m_now_arr_buf(max_nodes);
+  Eigen::ArrayXi k_now_arr_buf(max_nodes);
+
+  Eigen::ArrayXXd s_now_buf(max_nodes, cb_paras.partition);
+  Eigen::ArrayXXd b_now_buf(max_nodes, cb_paras.partition);
+  Eigen::ArrayXXd cb_now_buf(max_nodes, cb_paras.partition);
+  Eigen::ArrayXXd dil_s_now_buf(max_nodes, cb_paras.partition);
+  Eigen::ArrayXXd equity_now_buf(max_nodes, cb_paras.partition);
+
+  Eigen::ArrayXXd b_next_buf(max_nodes, cb_paras.partition);
+  Eigen::ArrayXXd cb_next_buf(max_nodes, cb_paras.partition);
+  Eigen::ArrayXXd dil_s_next_buf(max_nodes, cb_paras.partition);
+  Eigen::ArrayXXd equity_next_buf(max_nodes, cb_paras.partition);
+
+  Eigen::ArrayXXd *p_s_now = &s_now_buf;
+  Eigen::ArrayXXd *p_b_now = &b_now_buf;
+  Eigen::ArrayXXd *p_cb_now = &cb_now_buf;
+  Eigen::ArrayXXd *p_dil_s_now = &dil_s_now_buf;
+  Eigen::ArrayXXd *p_equity_now = &equity_now_buf;
+
+  Eigen::ArrayXXd *p_b_next = &b_next_buf;
+  Eigen::ArrayXXd *p_cb_next = &cb_next_buf;
+  Eigen::ArrayXXd *p_dil_s_next = &dil_s_next_buf;
+  Eigen::ArrayXXd *p_equity_next = &equity_next_buf;
+
+  {
+    // A. Identify dimensions for Maturity
+    int node_term = num_node_steps[n];
+    int idx_start_term = cum_node_steps[cum_node_steps.size() - 2];
+
+    // B. Create VIEWS into the global input data (No Copying)
+    const auto l_next_final = l_data.middleRows(idx_start_term, node_term);
+    const auto s_next_final =
+        equity_tree.middleRows(idx_start_term, node_term);
+
+    // C. Create WRITEABLE VIEWS into your "Next" buffers
+    // These act like references; writing to them fills the buffer.
+    auto b_next_view = p_b_next->topRows(node_term);
+    auto cb_next_view = p_cb_next->topRows(node_term);
+    auto dil_s_next_view = p_dil_s_next->topRows(node_term);
+    auto equity_next_view = p_equity_next->topRows(node_term);
+
+    // D. Initialize Defaults (Equivalent to ::Zero)
+    b_next_view.setZero();
+    cb_next_view.setZero();
+    dil_s_next_view.setZero();
+    equity_next_view = s_next_final; // Initial Equity is Stock Price
+
+    // E. Masks (Calculated on the global read-only data)
+    const auto is_nan = l_next_final.isNaN();
+    const auto is_pos = l_next_final > 0.0;
+    const auto is_neg = !is_pos;
+    const auto is_valid = !is_nan && !is_pos;
+    const auto low_f = (cb_paras.CR * s_next_final) < cb_paras.F;
+    const auto no_convert = is_valid && low_f;
+    const auto convert = is_valid && !no_convert;
+
+    // F. Apply Payoffs (Writing into the Views)
+    dil_s_next_view = is_nan.select(NaN, dil_s_next_view);
+
+    b_next_view = is_pos.select(cb_paras.F * cb_paras.rr, b_next_view);
+
+    cb_next_view = is_pos.select(
+        cb_paras.F * cb_paras.rr * (-l_next_final).exp(), cb_next_view);
+    cb_next_view = no_convert.select(cb_paras.F, cb_next_view);
+
+    dil_s_next_view = no_convert.select(s_next_final, dil_s_next_view);
+
+    const Eigen::ArrayXXd conv_val =
+        (s_next_final * cb_paras.NS + cb_paras.NC * cb_paras.F) /
+        (cb_paras.CR * cb_paras.NC + cb_paras.NS);
+
+    dil_s_next_view =
+        convert.select(s_next_final.min(conv_val), dil_s_next_view);
+
+    cb_next_view = convert.select(
+        (dil_s_next_view * cb_paras.CR).max(cb_paras.F), cb_next_view);
+
+    b_next_view =
+        is_neg.select(cb_paras.F * (1 + cb_paras.coupon_rate), b_next_view);
+  }
+
   for (size_t i = n; i >= 1; --i) {
 
     const double dt = (i == 1) ? coupon_info.dt_first : cb_paras.dt_other;
     const double jump = (i == 1) ? jump_first : jump_other;
     const int idx_start = (i > 1) ? cum_node_steps[i - 2] : 0;
+    const int idx_start_next = cum_node_steps[i - 1];
     const int num_nodes = num_node_steps[i - 1];
+    const int num_nodes_next = num_node_steps[i];
 
     const Eigen::ArrayXi h_range = Eigen::ArrayXi::LinSpaced(
         num_nodes, idx_start, idx_start + num_nodes - 1);
-    const auto &l_now = l_data.middleRows(idx_start, num_nodes);
-    const auto &s_now = equity_tree.middleRows(idx_start, num_nodes);
 
-    Eigen::ArrayXXd b_now =
-        Eigen::ArrayXXd::Zero(l_now.rows(), cb_paras.partition);
-    Eigen::ArrayXXd cb_now =
-        Eigen::ArrayXXd::Zero(l_now.rows(), cb_paras.partition);
-    Eigen::ArrayXXd dil_s_now =
-        Eigen::ArrayXXd::Zero(l_now.rows(), cb_paras.partition);
-    Eigen::ArrayXXd equity_now =
-        Eigen::ArrayXXd::Zero(l_now.rows(), cb_paras.partition);
+    auto l_now = l_data.middleRows(idx_start, num_nodes);
+    auto l_next = l_data.middleRows(idx_start_next, num_nodes_next);
+    auto s_now = equity_tree.middleRows(idx_start, num_nodes);
 
-    Eigen::ArrayXd m_now_arr =
-        idx_vec.col(1).middleRows(idx_start, num_nodes).cast<double>();
-    Eigen::ArrayXi k_now_arr = idx_vec.col(2).middleRows(idx_start, num_nodes);
+    auto b_now = p_b_now->topRows(num_nodes);
+    auto cb_now = p_cb_now->topRows(num_nodes);
+    auto dil_s_now = p_dil_s_now->topRows(num_nodes);
+    auto equity_now = p_equity_now->topRows(num_nodes);
+
+    auto b_next = p_b_next->topRows(num_nodes_next);
+    auto cb_next = p_cb_next->topRows(num_nodes_next);
+    auto dil_s_next = p_dil_s_next->topRows(num_nodes_next);
+    auto equity_next = p_equity_next->topRows(num_nodes_next);
+
+    auto m_now_arr = m_now_arr_buf.head(num_nodes);
+    auto k_now_arr = k_now_arr_buf.head(num_nodes);
+    m_now_arr = idx_vec.col(1).middleRows(idx_start, num_nodes).cast<double>();
+    k_now_arr = idx_vec.col(2).middleRows(idx_start, num_nodes);
+
     Eigen::ArrayXd nxt_m_arr =
         nxt_m.middleRows(idx_start, num_nodes).cast<double>();
 
@@ -281,18 +338,15 @@ void CbTreeBuild(const CbParas &cb_paras, const CdgParas &cdg_paras,
       cb_now(valid_idx, p) = cb_res;
       equity_now(valid_idx, p) = equity_res;
     }
-    std::swap(b_now, b_next);
-    std::swap(cb_now, cb_next);
-    std::swap(equity_now, equity_next);
+    std::swap(p_b_next, p_b_now);
+    std::swap(p_cb_next, p_cb_now);
+    std::swap(p_equity_next, p_equity_now);
     std::swap(map_now, map_next);
 
-    b_now.setZero();
-    cb_now.setZero();
-    equity_now.setZero();
     map_now.setConstant(-1);
   }
   std::printf("Cb Tree Build Completed.\n");
-  std::printf("Cb: %.6f\n", cb_next(0, 0));
-  std::printf("Bond: %.6f\n", b_next(0, 0));
-  std::printf("Equity: %.6f\n", equity_next(0, 0));
+  std::printf("Cb: %.6f\n", (*p_cb_next)(0, 0));
+  std::printf("Bond: %.6f\n", (*p_b_next)(0, 0));
+  std::printf("Equity: %.6f\n", (*p_equity_next)(0, 0));
 }

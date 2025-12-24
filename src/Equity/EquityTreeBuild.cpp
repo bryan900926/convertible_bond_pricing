@@ -1,4 +1,5 @@
 #include "Eigen/Dense"
+#include <iostream>
 #include <vector>
 
 #include "..\Pricing\CbModel.h"
@@ -12,18 +13,15 @@ EquityTreeBuildResult EquityTreeBuild(const std::vector<LNode> &l_data,
                                       const std::vector<MNode> &next_m_data,
                                       const VasciekParas &vasciek_paras,
                                       const CouponPaidInfo &coupon_info) {
-  const GaussHermiteResult gh_rule = compute_gauss_hermite_rule(cb_paras.qdt);
-
   const Eigen::ArrayXd ratio_min_vec =
       Eigen::ArrayXd::LinSpaced(cb_paras.partition, 1.0, 0.0);
   const Eigen::ArrayXd ratio_max_vec =
       Eigen::ArrayXd::LinSpaced(cb_paras.partition, 0.0, 1.0);
 
   Eigen::ArrayX3i idx_vec = Eigen::ArrayX3i::Zero(l_data.size(), 3);
-  Eigen::ArrayXi nxt_m(l_data.size());
-  Eigen::Array<double, Eigen::Dynamic, 9> nxt_p(l_data.size(), 9);
+  Eigen::ArrayXi nxt_m(next_m_data.size());
+  Eigen::Array<double, Eigen::Dynamic, 9> nxt_p(next_p_data.size(), 9);
 
-  double dt, jump, theta_t, theta_t1;
   const double x0 = std::log(cdg_paras.V0);
   const double y0 = std::log(cdg_paras.V0);
   const Eigen::ArrayXd &thetas = tree_result.alpha_result.thetas;
@@ -39,7 +37,6 @@ EquityTreeBuildResult EquityTreeBuild(const std::vector<LNode> &l_data,
   Eigen::ArrayXd theta1_data_partition = Eigen::ArrayXd::Zero(l_data.size());
   Eigen::ArrayXd v_data = Eigen::ArrayXd::Zero(l_data.size());
 
-  jump = jump_other;
   // other steps
   for (int h = 0; h < l_data.size(); ++h) {
     idx_vec(h, 0) = l_data[h].step - 1;
@@ -52,7 +49,7 @@ EquityTreeBuildResult EquityTreeBuild(const std::vector<LNode> &l_data,
 
     const double r_t = tree_result.short_rate_tree(
         static_cast<int>(l_data[h].k), static_cast<int>(l_data[h].step) - 1);
-    const double x_t = x0 + l_data[h].m * jump;
+    const double x_t = x0 + l_data[h].m * jump_other;
     const double v_t =
         std::exp(y0 + (x_t - x0) +
                  cdg_paras.sigma_v * cb_paras.rho * (r_t - vasciek_paras.r0) /
@@ -65,16 +62,16 @@ EquityTreeBuildResult EquityTreeBuild(const std::vector<LNode> &l_data,
     theta1_data_partition(h) = thetas(t + 1);
     v_data(h) = v_t;
 
-    nxt_m(h, 0) = next_m_data[h].nxt_m;
-
-    for (int j = 0; j < 9; ++j) {
-      nxt_p(h, j) = next_p_data[h].prob_matrix[j / 3][j % 3];
+    if (h < next_m_data.size()) {
+      nxt_m(h, 0) = next_m_data[h].nxt_m;
+      for (int j = 0; j < 9; ++j) {
+        nxt_p(h, j) = next_p_data[h].prob_matrix[j / 3][j % 3];
+      }
     }
   }
-
   const EquityContext ctx = EquityContextVec(
-      dt, l_data_partition, r_data_partition, theta_data_partition,
-      theta1_data_partition, cb_paras, cdg_paras, vasciek_paras);
+      cb_paras.dt_other, l_data_partition, r_data_partition, theta_data_partition * vasciek_paras.kappa,
+      theta1_data_partition * vasciek_paras.kappa, cb_paras, cdg_paras, vasciek_paras);
 
   Eigen::ArrayXXd equity_tree =
       EquityFunVec(cb_paras, ctx, v_data) / cb_paras.NS;
@@ -87,14 +84,12 @@ EquityTreeBuildResult EquityTreeBuild(const std::vector<LNode> &l_data,
     Eigen::ArrayXd theta1_data_first = Eigen::ArrayXd::Zero(1);
     Eigen::ArrayXd v_data_first = Eigen::ArrayXd::Zero(1);
 
-    dt = coupon_info.dt_first;
-    jump = jump_first;
     const Eigen::ArrayXd l_vec =
         l_data[0].l_min * ratio_min_vec + l_data[0].l_max * ratio_max_vec;
 
     const double r_t = tree_result.short_rate_tree(
         static_cast<int>(l_data[0].k), static_cast<int>(l_data[0].step) - 1);
-    const double x_t = x0 + l_data[0].m * jump;
+    const double x_t = x0 + l_data[0].m * jump_first;
     const double v_t =
         std::exp(y0 + (x_t - x0) +
                  cdg_paras.sigma_v * cb_paras.rho * (r_t - vasciek_paras.r0) /
@@ -103,12 +98,12 @@ EquityTreeBuildResult EquityTreeBuild(const std::vector<LNode> &l_data,
     l_data_first.row(0).segment(0, cb_paras.partition) = l_vec.transpose();
 
     r_data_first(0) = r_t;
-    theta_data_first(0) = theta_t;
-    theta1_data_first(0) = theta_t1;
+    theta_data_first(0) = 0;
+    theta1_data_first(0) = 0;
     v_data_first(0) = v_t;
     equity_tree(0, Eigen::all) =
         EquityFunVec(cb_paras,
-                     EquityContextVec(dt, l_data_first, r_data_first,
+                     EquityContextVec(coupon_info.dt_first, l_data_first, r_data_first,
                                       theta_data_first, theta1_data_first,
                                       cb_paras, cdg_paras, vasciek_paras),
                      v_data_first) /

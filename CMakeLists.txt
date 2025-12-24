@@ -22,7 +22,13 @@ add_executable(convertible_bond
     ${MY_SOURCES}
 )
 
-add_compile_options(-Wall -Wextra -Wpedantic)
+add_compile_options(
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Wunused-variable
+    -Wunused-parameter
+)
 
 #debug profiling with gprof
 if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")

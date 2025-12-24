@@ -11,16 +11,16 @@ int main()
         0.1,     // sigma_V
         100.0,   // F
         0.4,     // rr
-        0.05,    // CR
+        2.5,    // CR
         36000,   // NS
-        100,     // NC
-        1,       // CP
+        3000,     // NC
+        120,       // CP
         20,      // qdt
         0,       // rho
         20,      // partition
         false,  // if_const_r
-        0.06,    // coupon_rate
-        1.0 / 2, // dt_other
+        0.075,    // coupon_rate
+        1.0 / 5, // dt_other
         1        // paid_cycle
     };
     CdgParas cdg_paras = {

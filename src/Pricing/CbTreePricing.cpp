@@ -1,7 +1,12 @@
 #include "..\Equity\EquityModel.h"
 #include "..\HullWhiteModel\HullWhiteModel.h"
 #include "CbModel.h"
+
+#include <cmath>
+#include <cstddef>
+#include <cstdio>
 #include <limits>
+#include <unordered_map>
 
 void CbTreePricing(const CbParas &cb_paras, const CdgParas &cdg_paras,
                    const VasciekParas vasciek_paras) {
@@ -50,10 +55,7 @@ void CbTreePricing(const CbParas &cb_paras, const CdgParas &cdg_paras,
   next_m_data.reserve(10000);
   int idx_total = 0, num_latest_nodes = 1;
 
-  // m in [-2n, 2n]
-  std::vector<std::vector<int>> l_idx_tracker(
-      (n + 1) * 4 + 2,
-      std::vector<int>(tree_result.short_rate_tree.rows(), -1));
+  std::unordered_map<long long, size_t> look_up_map;
 
   const double NaN = std::numeric_limits<double>::quiet_NaN();
 
@@ -85,7 +87,7 @@ void CbTreePricing(const CbParas &cb_paras, const CdgParas &cdg_paras,
 
     const int level_start_idx = idx_total - num_latest_nodes + 1;
     const int level_end_idx = idx_total;
-    const double S1 = cdg_paras.sigma_v * cdg_paras.sigma_v * dt;
+    const double S1 = sigma_x * sigma_x * dt;
 
     for (int count = level_start_idx; count <= level_end_idx; ++count) {
       const int m_now = l_data[count].m;
@@ -122,7 +124,6 @@ void CbTreePricing(const CbParas &cb_paras, const CdgParas &cdg_paras,
       const double p_m =
           (S1 * (c - a) + a * c * (c - a)) / ((b - c) * (b - a) * (c - a));
       const double p_d = 1 - p_u - p_m;
-
       PNode p_node = {i,
                       k_now,
                       m_now,
@@ -136,13 +137,12 @@ void CbTreePricing(const CbParas &cb_paras, const CdgParas &cdg_paras,
       for (int j = 0; j < 9; ++j) {
         const int m_next = nxt_m + dm_vec[j];
         const size_t k_next = pz_result.nxt_r_idx(k_now, (j / 3));
-        const int m_next_query = m_next + l_idx_offset;
-        const int key = l_idx_tracker[m_next_query][k_next];
-
+        const long long hash_val = (static_cast<long long>(m_next) << 32) | k_next;
+        const auto search = look_up_map.find(hash_val);
         if (l_min_now > 0) {
-          if (key == -1) {
+          if (search == look_up_map.end()) {
             l_data.emplace_back(LNode{i + 1, k_next, m_next, NaN, NaN});
-            l_idx_tracker[m_next_query][k_next] = ++idx_total;
+            look_up_map[hash_val] = ++idx_total;
           }
           continue;
         }
@@ -161,12 +161,12 @@ void CbTreePricing(const CbParas &cb_paras, const CdgParas &cdg_paras,
         const double l_next_min = scratch_next.minCoeff();
         const double l_next_max = scratch_next.maxCoeff();
 
-        if (key == -1) {
+        if (search == look_up_map.end()) {
           l_data.emplace_back(
               LNode{i + 1, k_next, m_next, l_next_min, l_next_max});
-          l_idx_tracker[m_next_query][k_next] = ++idx_total;
+          look_up_map[hash_val] = ++idx_total;
         } else {
-          LNode &exist_node = l_data[l_idx_tracker[m_next_query][k_next]];
+          LNode &exist_node = l_data[look_up_map[hash_val]];
           exist_node.l_min = std::min(exist_node.l_min, l_next_min);
           exist_node.l_max = std::max(exist_node.l_max, l_next_max);
         }
@@ -174,51 +174,27 @@ void CbTreePricing(const CbParas &cb_paras, const CdgParas &cdg_paras,
     }
     num_latest_nodes = idx_total - level_end_idx;
     num_node_steps[i] = num_latest_nodes;
-    for (auto &row : l_idx_tracker) {
-      std::fill(row.begin(), row.end(), -1);
-    }
+    look_up_map.clear();
   }
-
-  std::sort(next_m_data.begin(), next_m_data.end(),
-            [](const MNode &a, const MNode &b) {
-              if (a.step != b.step)
-                return a.step < b.step;
-              else if (a.m != b.m)
-                return a.m < b.m;
-              else
-                return a.k < b.k;
-            });
-
-  std::sort(next_p_data.begin(), next_p_data.end(),
-            [](const PNode &a, const PNode &b) {
-              if (a.step != b.step)
-                return a.step < b.step;
-              else if (a.m != b.m)
-                return a.m < b.m;
-              else
-                return a.k < b.k;
-            });
-
-  std::sort(l_data.begin(), l_data.end(), [](const LNode &a, const LNode &b) {
+  auto comp = [](const auto &a, const auto &b) {
     if (a.step != b.step)
       return a.step < b.step;
-    else if (a.m != b.m)
-      return a.m < b.m;
-    else
+    else if (a.k != b.k)
       return a.k < b.k;
-  });
+    else
+      return a.m < b.m;
+  };
 
-  std::sort(l_data.begin(), l_data.end(), [](const LNode &a, const LNode &b) {
-    if (a.step != b.step)
-      return a.step < b.step;
-    else if (a.m != b.m)
-      return a.m < b.m;
-    else
-      return a.k < b.k;
-  });
+  std::sort(next_m_data.begin(), next_m_data.end(), comp);
+
+  std::sort(next_p_data.begin(), next_p_data.end(), comp);
+
+  std::sort(l_data.begin(), l_data.end(), comp);
+
   EquityTreeBuildResult equity_tree_result =
       EquityTreeBuild(l_data, tree_result, cb_paras, cdg_paras, next_p_data,
                       next_m_data, vasciek_paras, coupon_info);
-  CbTreeBuild(cb_paras, cdg_paras, vasciek_paras, equity_tree_result,
-              tree_result, coupon_info, pz_result, num_node_steps);
+
+  CbTreeBuildMemoSave(cb_paras, cdg_paras, vasciek_paras, equity_tree_result,
+                      tree_result, coupon_info, pz_result, num_node_steps);
 }
