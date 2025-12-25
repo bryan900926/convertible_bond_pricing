@@ -37,9 +37,9 @@ double Timer::ElapsedMillis() const
     return duration.count();
 }
 
-void Timer::Print() const
+void Timer::Print(std::string info) const
 {
-    std::cout << "[TIMER] " << std::left << std::setw(20) << m_name
+    std::cout << "[TIMER] " << std::left << std::setw(20) << (info.empty() ? m_name : info)
               << ": " << ElapsedMillis() / 1000.0 << " s" << std::endl;
 }
 

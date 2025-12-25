@@ -1,7 +1,4 @@
 #include <Eigen/Dense>
-#include <vector>
-#include <algorithm> // For std::clamp or min/max
-#include <iostream>
 
 #include "HullWhiteModel.h"
 
