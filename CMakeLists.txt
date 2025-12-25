@@ -22,6 +22,10 @@ add_executable(convertible_bond
     ${MY_SOURCES}
 )
 
+target_include_directories(convertible_bond PRIVATE 
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
 add_compile_options(
     -Wall
     -Wextra
@@ -30,13 +34,17 @@ add_compile_options(
     -Wunused-parameter
 )
 
-#debug profiling with gprof
-if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-    message(STATUS "Enabling Gprof profiling")
-    
+# --- NEW ---
+option(ENABLE_PROFILING "Enable gprof profiling" OFF) # Defaults to OFF
+
+if (CMAKE_CXX_COMPILER_ID MATCHES "GNU" AND ENABLE_PROFILING)
+    message(STATUS ">> PROFILING ENABLED: Code will be slower but trackable <<")
     target_compile_options(convertible_bond PRIVATE -pg)
-    
     target_link_options(convertible_bond PRIVATE -pg -no-pie)
+else()
+    message(STATUS ">> PROFILING DISABLED: Max speed mode <<")
+    # Add Optimization flags for Release mode
+    target_compile_options(convertible_bond PRIVATE -O3 -march=native)
 endif()
 
 target_link_libraries(convertible_bond PRIVATE Eigen3::Eigen)

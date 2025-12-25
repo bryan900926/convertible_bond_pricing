@@ -3,14 +3,13 @@
 #include "src/Pricing/CbModel.h"
 #include "src/Util/Timer.h"
 
-int main()
-{
-    Timer timer("CbTreePricing Main Timer");
+int main() {
+  Timer time("Cb Tree Pricing Main");
     CbParas cb_paras = {
         1.0,     // T
         0.1,     // sigma_V
         100.0,   // F
-        0.4,     // rr
+        0.5,     // rr
         2.5,    // CR
         36000,   // NS
         3000,     // NC
@@ -20,7 +19,7 @@ int main()
         20,      // partition
         false,  // if_const_r
         0.075,    // coupon_rate
-        1.0 / 5, // dt_other
+        1.0 / 96, // dt_other
         1        // paid_cycle
     };
     CdgParas cdg_paras = {

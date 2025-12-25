@@ -1,22 +1,19 @@
 #include <Eigen/Dense>
 #include <vector>
 #include <cmath>
-
 #include "..\Equity\EquityModel.h"
-#include "..\Util\Timer.h"
 #include "CbModel.h"
 #include "Eigen/src/Core/Array.h"
 #include "Eigen/src/Core/util/Constants.h"
 
-void CbTreeBuild(const CbParas &cb_paras, const CdgParas &cdg_paras,
-                 const VasciekParas &vasciek_paras,
-                 const EquityTreeBuildResult &equity_tree_result,
-                 const HullWhiteTreeResult &tree_result,
-                 const CouponPaidInfo &coupon_info,
-                 const PzTreeResult &pz_result,
-                 const std::vector<int> &num_node_steps)
+void CbTreeBuildV2(const CbParas &cb_paras, const CdgParas &cdg_paras,
+                   const VasciekParas &vasciek_paras,
+                   const EquityTreeBuildResult &equity_tree_result,
+                   const HullWhiteTreeResult &tree_result,
+                   const CouponPaidInfo &coupon_info,
+                   const PzTreeResult &pz_result,
+                   const std::vector<int> &num_node_steps)
 {
-    Timer time("Cb Tree Build Backward");
     const Eigen::ArrayXXd &equity_tree = equity_tree_result.equity_tree;
     const Eigen::ArrayX3i &idx_vec =
         equity_tree_result.idx_vec; // [[step,m,k],...]
@@ -66,8 +63,6 @@ void CbTreeBuild(const CbParas &cb_paras, const CdgParas &cdg_paras,
 
     Eigen::ArrayXXd l_next = l_data.middleRows(
         cum_node_steps[cum_node_steps.size() - 2], num_node_steps[n]);
-    Eigen::ArrayXXd s_next = equity_tree.middleRows(
-        cum_node_steps[cum_node_steps.size() - 2], num_node_steps[n]);
 
     Eigen::ArrayXXd b_next =
         Eigen::ArrayXXd::Zero(l_next.rows(), cb_paras.partition);
@@ -75,13 +70,14 @@ void CbTreeBuild(const CbParas &cb_paras, const CdgParas &cdg_paras,
         Eigen::ArrayXXd::Zero(l_next.rows(), cb_paras.partition);
     Eigen::ArrayXXd dil_s_next =
         Eigen::ArrayXXd::Zero(l_next.rows(), cb_paras.partition);
-    Eigen::ArrayXXd equity_next = s_next;
+    Eigen::ArrayXXd equity_next = equity_tree.middleRows(
+        cum_node_steps[cum_node_steps.size() - 2], num_node_steps[n]);
 
     const auto is_nan = l_next.isNaN();
     const auto is_pos = l_next > 0.0;
     const auto is_neg = !is_pos;
     const auto is_valid = !is_nan && !is_pos;
-    const auto low_f = (cb_paras.CR * s_next) < cb_paras.F;
+    const auto low_f = (cb_paras.CR * equity_next) < cb_paras.F;
     const auto no_convert = is_valid && low_f;
     const auto convert = is_valid && !no_convert;
 
@@ -89,15 +85,15 @@ void CbTreeBuild(const CbParas &cb_paras, const CdgParas &cdg_paras,
     b_next = is_pos.select(cb_paras.F * cb_paras.rr, b_next);
     cb_next = is_pos.select(cb_paras.F * cb_paras.rr * (-l_next).exp(), cb_next);
     cb_next = no_convert.select(cb_paras.F, cb_next);
-    dil_s_next = no_convert.select(s_next, dil_s_next);
+    equity_next = is_pos.select(0.0, equity_next);
+    dil_s_next = no_convert.select(equity_next, dil_s_next);
 
     const Eigen::ArrayXXd conv_val =
-        (s_next * cb_paras.NS + cb_paras.NC * cb_paras.F) /
+        (equity_next * cb_paras.NS + cb_paras.NC * cb_paras.F) /
         (cb_paras.CR * cb_paras.NC + cb_paras.NS);
-    dil_s_next = convert.select(s_next.min(conv_val), dil_s_next);
+    dil_s_next = convert.select(equity_next.min(conv_val), dil_s_next);
     cb_next = convert.select((dil_s_next * cb_paras.CR).max(cb_paras.F), cb_next);
     b_next = is_neg.select(cb_paras.F * (1 + cb_paras.coupon_rate), b_next);
-
     Eigen::ArrayXd dm_vec(9);
     dm_vec << 2, 2, 2, 0, 0, 0, -2, -2, -2;
     const double l_hat_first =
@@ -111,68 +107,53 @@ void CbTreeBuild(const CbParas &cb_paras, const CdgParas &cdg_paras,
         const int idx_start = (i > 1) ? cum_node_steps[i - 2] : 0;
         const int num_nodes = num_node_steps[i - 1];
 
-        const auto l_now = l_data.middleRows(idx_start, num_nodes);
-        const auto s_now = equity_tree.middleRows(idx_start, num_nodes);
-
         Eigen::ArrayXXd b_now =
-            Eigen::ArrayXXd::Zero(l_now.rows(), cb_paras.partition);
+            Eigen::ArrayXXd::Zero(num_nodes, cb_paras.partition);
         Eigen::ArrayXXd cb_now =
-            Eigen::ArrayXXd::Zero(l_now.rows(), cb_paras.partition);
-        Eigen::ArrayXXd dil_s_now =
-            Eigen::ArrayXXd::Zero(l_now.rows(), cb_paras.partition);
+            Eigen::ArrayXXd::Zero(num_nodes, cb_paras.partition);
         Eigen::ArrayXXd equity_now =
-            Eigen::ArrayXXd::Zero(l_now.rows(), cb_paras.partition);
+            Eigen::ArrayXXd::Zero(num_nodes, cb_paras.partition);
 
-        int coupont_flag = (i > 1) && coupon_info.is_coupon_paid[i - 1];
+        int bool_flag = (i > 1) && coupon_info.is_coupon_paid[i - 1];
 
-        for (size_t p = 0; p < cb_paras.partition; ++p)
+        for (int k = 0; k < num_nodes; ++k)
         {
-            const auto l_now_vec = l_now.col(p); // h x 1
-            const auto s_now_vec = s_now.col(p); // h x 1
+            const int global_idx = idx_start + k;
 
-            const auto is_nan = l_now_vec.isNaN();
-            const auto is_pos = l_now_vec > 0.0;
-            const auto no_convert =
-                !is_nan && !is_pos && (cb_paras.CR * s_now_vec < cb_paras.F);
-            const auto convert = !(is_nan || is_pos || no_convert);
+            const int m_now = idx_vec(global_idx, 1);
+            const int k_now = idx_vec(global_idx, 2);
+            const int next_m_middle = nxt_m(global_idx);
 
-            dil_s_now.col(p) = no_convert.select(s_now_vec, dil_s_now.col(p));
-            dil_s_now.col(p) = convert.select(
-                s_now_vec.min((s_now_vec * cb_paras.NS + cb_paras.NC * cb_paras.F) /
-                              (cb_paras.CR * cb_paras.NC + cb_paras.NS)),
-                dil_s_now.col(p));
+            map_now((m_now + m_idx_offset) * cols + k_now) = k;
 
-            b_now.col(p) = is_pos.select(cb_paras.F * cb_paras.rr, b_now.col(p));
-            dil_s_now.col(p) = is_pos.select(0, dil_s_now.col(p));
-            equity_now.col(p) = is_pos.select(0, equity_now.col(p));
-            cb_now.col(p) = is_pos.select(
-                cb_paras.F * cb_paras.rr * (-l_now_vec).exp(), cb_now.col(p));
+            const double r_now = tree_result.short_rate_tree(k_now, i - 1);
+            const double x_now = x0 + m_now * jump;
+            const double y_now = y0 + (x_now - x0) +
+                                 cdg_paras.sigma_v * cb_paras.rho *
+                                     (r_now - vasciek_paras.r0) /
+                                     vasciek_paras.sigma_r;
+            const double miu_y = r_now - miu_y_second;
+            const double l_hat = l_hat_first - r_now * (1 / cdg_paras.lamda + cdg_paras.phi);
+            const double df = std::exp(-r_now * dt);
 
-            const auto interp = !(is_nan || is_pos); // num_interp x 1
-
-            for (int k = 0; k < interp.size(); ++k)
+            for (size_t p = 0; p < cb_paras.partition; ++p)
             {
-
-                int survival_flag = interp(k);
-
-                const int l_idx = idx_start + k;
-                const int m_now = idx_vec(l_idx, 1);
-                const int k_now = idx_vec(l_idx, 2);
-                const int next_m_middle = nxt_m(l_idx);
-
-                map_now((m_now + m_idx_offset) * cols + k_now) = k;
-
-                const double r_now = tree_result.short_rate_tree(k_now, i - 1);
-                const double x_now = x0 + m_now * jump;
-                const double y_now = y0 + (x_now - x0) +
-                                     cdg_paras.sigma_v * cb_paras.rho *
-                                         (r_now - vasciek_paras.r0) /
-                                         vasciek_paras.sigma_r;
-                const double miu_y = r_now - miu_y_second;
-                const double l_hat = l_hat_first - r_now * (1 / cdg_paras.lamda + cdg_paras.phi);
-                const double s_now = s_now_vec(k);
-                const double df = std::exp(-r_now * dt);
-                const double l_curr = l_now_vec(k);
+                const double l_curr = l_data(global_idx, p);
+                const bool survival_flag = l_curr <= 0;
+                const double s_now = equity_tree(global_idx, p);
+                const bool no_convert_flag =
+                    survival_flag && ((cb_paras.CR * s_now) < cb_paras.F);
+                double current_dil_s = 0.0;
+                if (no_convert_flag)
+                {
+                    current_dil_s = s_now;
+                }
+                else
+                {
+                    double val_conv = (s_now * cb_paras.NS + cb_paras.NC * cb_paras.F) /
+                                      (cb_paras.CR * cb_paras.NC + cb_paras.NS);
+                    current_dil_s = std::min(s_now, val_conv);
+                }
 
                 double b_expected = 0.0;
                 double cb_expected = 0.0;
@@ -213,19 +194,18 @@ void CbTreeBuild(const CbParas &cb_paras, const CdgParas &cdg_paras,
                     const double equity_val =
                         equity_next(l_idx, idx_low) +
                         weight * (equity_next(l_idx, idx_high) - equity_next(l_idx, idx_low));
-                    b_expected += b_val * nxt_p(k, j);
-                    cb_expected += cb_val * nxt_p(k, j);
-                    eq_expected += equity_val * nxt_p(k, j);
+                    const double prob = nxt_p(global_idx, j);
+                    b_expected += b_val * prob;
+                    cb_expected += cb_val * prob;
+                    eq_expected += equity_val * prob;
                 }
-
                 b_expected *= df;
+                b_expected += cb_paras.coupon_rate * cb_paras.F * bool_flag;
                 cb_expected *= df;
                 eq_expected *= df;
-                double conversion_val = dil_s_now(k, p) * cb_paras.CR;
+                double conversion_val = current_dil_s * cb_paras.CR;
                 double call_val = 1.0 * cb_paras.CP;
                 double final_cb = cb_expected;
-
-                b_expected += cb_paras.coupon_rate * cb_paras.F * coupont_flag;
 
                 if (final_cb > call_val)
                     final_cb = call_val;
@@ -233,15 +213,19 @@ void CbTreeBuild(const CbParas &cb_paras, const CdgParas &cdg_paras,
                 if (final_cb < conversion_val)
                     final_cb = conversion_val;
 
-                b_now(k, p) = b_expected * survival_flag;
-                cb_now(k, p) = final_cb * survival_flag;
-                equity_now(k, p) = eq_expected * survival_flag;
+                b_now(k, p) = survival_flag ? b_expected : cb_paras.F * cb_paras.coupon_rate * bool_flag;
+
+                cb_now(k, p) = survival_flag ? final_cb : std::exp(-l_curr) * cb_paras.F * cb_paras.rr;
+
+                equity_now(k, p) = eq_expected;
             }
         }
         std::swap(b_now, b_next);
         std::swap(cb_now, cb_next);
         std::swap(equity_now, equity_next);
         std::swap(map_now, map_next);
+
+        l_next = l_data.middleRows(idx_start, num_nodes);
     }
     std::printf("Cb Tree Build Completed.\n");
     std::printf("Cb: %.6f\n", cb_next(0, 0));

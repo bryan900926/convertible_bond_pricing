@@ -66,3 +66,4 @@ EquityTreeBuildResult EquityTreeBuild(const std::vector<LNode> &l_data,
                                       const std::vector<MNode> &next_m_data,
                                       const VasciekParas &vasciek_paras,
                                       const CouponPaidInfo &coupon_info);
+

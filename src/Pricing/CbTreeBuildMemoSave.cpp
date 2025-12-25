@@ -3,17 +3,19 @@
 
 #include "..\Equity\EquityModel.h"
 #include "CbModel.h"
+#include "../Util/Timer.h"
 #include "Eigen/src/Core/Array.h"
 #include "Eigen/src/Core/util/Constants.h"
 
 void CbTreeBuildMemoSave(const CbParas &cb_paras, const CdgParas &cdg_paras,
-                 const VasciekParas &vasciek_paras,
-                 const EquityTreeBuildResult &equity_tree_result,
-                 const HullWhiteTreeResult &tree_result,
-                 const CouponPaidInfo &coupon_info,
-                 const PzTreeResult &pz_result,
-                 const std::vector<int> &num_node_steps) {
+                         const VasciekParas &vasciek_paras,
+                         const EquityTreeBuildResult &equity_tree_result,
+                         const HullWhiteTreeResult &tree_result,
+                         const CouponPaidInfo &coupon_info,
+                         const PzTreeResult &pz_result,
+                         const std::vector<int> &num_node_steps) {
 
+  const double EPSILON = 1e-12;
   const Eigen::ArrayXXd &equity_tree = equity_tree_result.equity_tree;
   const Eigen::ArrayX3i &idx_vec =
       equity_tree_result.idx_vec; // [[step,m,k],...]
@@ -84,7 +86,6 @@ void CbTreeBuildMemoSave(const CbParas &cb_paras, const CdgParas &cdg_paras,
   Eigen::ArrayXXd *p_cb_next = &cb_next_buf;
   Eigen::ArrayXXd *p_dil_s_next = &dil_s_next_buf;
   Eigen::ArrayXXd *p_equity_next = &equity_next_buf;
-
   {
     // A. Identify dimensions for Maturity
     int node_term = num_node_steps[n];
@@ -141,9 +142,17 @@ void CbTreeBuildMemoSave(const CbParas &cb_paras, const CdgParas &cdg_paras,
     b_next_view =
         is_neg.select(cb_paras.F * (1 + cb_paras.coupon_rate), b_next_view);
   }
+  Eigen::ArrayXi valid_idx_buf(max_nodes * 9);
+    Eigen::ArrayXd l_1_buf(max_nodes * 9);
+    Eigen::ArrayXd l_2_buf(max_nodes * 9);
+    Eigen::ArrayXd cb_interp_1_buf(max_nodes * 9);
+    Eigen::ArrayXd cb_interp_2_buf(max_nodes * 9);
+    Eigen::ArrayXd b_interp_1_buf(max_nodes * 9);
+    Eigen::ArrayXd b_interp_2_buf(max_nodes * 9);
+    Eigen::ArrayXd equity_interp_1_buf(max_nodes * 9);
+    Eigen::ArrayXd equity_interp_2_buf(max_nodes * 9);
 
   for (size_t i = n; i >= 1; --i) {
-
     const double dt = (i == 1) ? coupon_info.dt_first : cb_paras.dt_other;
     const double jump = (i == 1) ? jump_first : jump_other;
     const int idx_start = (i > 1) ? cum_node_steps[i - 2] : 0;
@@ -156,8 +165,8 @@ void CbTreeBuildMemoSave(const CbParas &cb_paras, const CdgParas &cdg_paras,
 
     auto l_now = l_data.middleRows(idx_start, num_nodes);
     auto l_next = l_data.middleRows(idx_start_next, num_nodes_next);
-    auto s_now = equity_tree.middleRows(idx_start, num_nodes);
 
+    auto s_now = equity_tree.middleRows(idx_start, num_nodes);
     auto b_now = p_b_now->topRows(num_nodes);
     auto cb_now = p_cb_now->topRows(num_nodes);
     auto dil_s_now = p_dil_s_now->topRows(num_nodes);
@@ -222,8 +231,8 @@ void CbTreeBuildMemoSave(const CbParas &cb_paras, const CdgParas &cdg_paras,
     Eigen::ArrayXd discount_factor = (-r_now_arr * dt).exp();
 
     for (size_t p = 0; p < cb_paras.partition; ++p) {
-      const Eigen::ArrayXd l_now_vec = l_now.col(p); // h x 1
-      const Eigen::ArrayXd s_now_vec = s_now.col(p); // h x 1
+      const auto l_now_vec = l_now.col(p); // h x 1
+      const auto s_now_vec = s_now.col(p); // h x 1
 
       const auto is_nan = l_now_vec.isNaN();
       const auto is_pos = l_now_vec > 0.0;
@@ -248,8 +257,13 @@ void CbTreeBuildMemoSave(const CbParas &cb_paras, const CdgParas &cdg_paras,
 
       if (num_interp == 0)
         continue;
+      
+      int cnt = 0;
+      for (int j = 0; j < interp.size(); ++j) {
+          if (interp(j)) valid_idx_buf(cnt++) = j;
+      }
 
-      Eigen::ArrayXi valid_idx = find_indices(interp);
+      auto valid_idx = valid_idx_buf.head(num_interp);
 
       Eigen::ArrayXd l_curr = l_now_vec(valid_idx);     // num_interp x 1
       Eigen::ArrayXd l_hat_curr = l_hat_arr(valid_idx); // num_interp x 1
@@ -259,7 +273,7 @@ void CbTreeBuildMemoSave(const CbParas &cb_paras, const CdgParas &cdg_paras,
            (l_curr + dt * cdg_paras.lamda * (l_hat_curr - l_curr)))
               .reshaped<Eigen::ColMajor>(); // (num_interp x 9) x 1
 
-      Eigen::ArrayXi flat_idx =
+      const auto flat_idx =
           nxt_idx(valid_idx, Eigen::all)
               .reshaped<Eigen::ColMajor>(); // num_interp x 9
       Eigen::ArrayXXd l_sub =
@@ -270,13 +284,8 @@ void CbTreeBuildMemoSave(const CbParas &cb_paras, const CdgParas &cdg_paras,
           cb_next(flat_idx, Eigen::all); // (num_interp x 9) x partition
       Eigen::ArrayXXd equity_sub =
           equity_next(flat_idx, Eigen::all); // (num_interp x 9) x partition
-      Eigen::ArrayXd l_first = l_sub.col(0); // num_interp x 1
-      Eigen::ArrayXd l_last = l_sub.col(l_sub.cols() - 1); // num_interp x 1
-
-      const auto mask_flat =
-          (l_first - l_last).abs() < 1e-8;             //(num_interp x 9) x 1
-      const auto mask_low = l_curr_to_next <= l_first; // (num_interp x 9) x 1
-      const auto mask_high = l_curr_to_next >= l_last; // (num_interp x 9) x 1
+      const auto l_first = l_sub.col(0); // num_interp x 1
+      const auto l_last = l_sub.col(l_sub.cols() - 1); // num_interp x 1
 
       Eigen::ArrayXi count =
           (l_sub <= l_curr_to_next.replicate(1, l_sub.cols()))
@@ -285,14 +294,14 @@ void CbTreeBuildMemoSave(const CbParas &cb_paras, const CdgParas &cdg_paras,
               .cast<int>();
       Eigen::ArrayXi nxt_l_idx = (count - 1).max(0).min(l_sub.cols() - 2);
 
-      Eigen::ArrayXd l_1(l_sub.rows());
-      Eigen::ArrayXd l_2(l_sub.rows());
-      Eigen::ArrayXd cb_interp_1(l_sub.rows());
-      Eigen::ArrayXd cb_interp_2(l_sub.rows());
-      Eigen::ArrayXd b_interp_1(l_sub.rows());
-      Eigen::ArrayXd b_interp_2(l_sub.rows());
-      Eigen::ArrayXd equity_interp_1(l_sub.rows());
-      Eigen::ArrayXd equity_interp_2(l_sub.rows());
+auto l_1 = l_1_buf.head(l_sub.rows());
+auto l_2 = l_2_buf.head(l_sub.rows());
+auto cb_interp_1 = cb_interp_1_buf.head(l_sub.rows());
+auto cb_interp_2 = cb_interp_2_buf.head(l_sub.rows());
+auto b_interp_1 = b_interp_1_buf.head(l_sub.rows());
+auto b_interp_2 = b_interp_2_buf.head(l_sub.rows());
+auto equity_interp_1 = equity_interp_1_buf.head(l_sub.rows());
+auto equity_interp_2 = equity_interp_2_buf.head(l_sub.rows());
 
       for (int j = 0; j < l_sub.rows(); ++j) {
         l_1(j) = l_sub(j, nxt_l_idx(j));
@@ -305,22 +314,25 @@ void CbTreeBuildMemoSave(const CbParas &cb_paras, const CdgParas &cdg_paras,
         equity_interp_2(j) = equity_sub(j, nxt_l_idx(j) + 1);
       }
 
-      Eigen::ArrayXd weight =
-          (l_curr_to_next - l_1) / (l_2 - l_1); // (num_interp x 9) x 1
-      weight = mask_flat.select(0, weight);
-      auto b_next_flat = DoInterp(b_interp_1, b_interp_2,
+      Eigen::ArrayXd denom = l_2 - l_1;
+      const auto is_flat = (denom.abs() < EPSILON);
+      Eigen::ArrayXd safe_denom = is_flat.select(1.0, denom);
+      Eigen::ArrayXd weight = (l_curr_to_next - l_1) / safe_denom;
+      weight = is_flat.select(0.0, weight);
+
+      const auto b_next_flat = DoInterp(b_interp_1, b_interp_2,
                                   weight); // (num_interp x 9) x 1
 
-      auto cb_next_flat = DoInterp(cb_interp_1, cb_interp_2,
+      const auto cb_next_flat = DoInterp(cb_interp_1, cb_interp_2,
                                    weight); // (num_interp x 9) x 1
-      auto equity_next_flat = DoInterp(equity_interp_1, equity_interp_2,
+      const auto equity_next_flat = DoInterp(equity_interp_1, equity_interp_2,
                                        weight); // (num_interp x 9) x 1
 
-      Eigen::ArrayXXd b_reshape_next =
+      const auto b_reshape_next =
           b_next_flat.reshaped<Eigen::ColMajor>(num_interp, 9);
-      Eigen::ArrayXXd cb_reshape_next =
+      const auto cb_reshape_next =
           cb_next_flat.reshaped<Eigen::ColMajor>(num_interp, 9);
-      Eigen::ArrayXXd equity_reshape_next =
+      const auto equity_reshape_next =
           equity_next_flat.reshaped<Eigen::ColMajor>(num_interp, 9);
       Eigen::ArrayXXd next_p_subs = nxt_p(h_range(valid_idx), Eigen::all);
 
@@ -342,7 +354,6 @@ void CbTreeBuildMemoSave(const CbParas &cb_paras, const CdgParas &cdg_paras,
     std::swap(p_cb_next, p_cb_now);
     std::swap(p_equity_next, p_equity_now);
     std::swap(map_now, map_next);
-
     map_now.setConstant(-1);
   }
   std::printf("Cb Tree Build Completed.\n");
