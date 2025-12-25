@@ -95,6 +95,7 @@ void CbTreeBuildV2(const CbParas &cb_paras, const CdgParas &cdg_paras,
     cb_next = convert.select((dil_s_next * cb_paras.CR).max(cb_paras.F), cb_next);
     b_next = is_neg.select(cb_paras.F * (1 + cb_paras.coupon_rate), b_next);
     Eigen::ArrayXd dm_vec(9);
+    // difference than matlab version, causing slight difference in results
     dm_vec << 2, 2, 2, 0, 0, 0, -2, -2, -2;
     const double l_hat_first =
         (cdg_paras.delta + cdg_paras.sigma_v * cdg_paras.sigma_v / 2) /
