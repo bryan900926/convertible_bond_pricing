@@ -188,17 +188,17 @@ void CbTreePricing(const CbParas &cb_paras, const CdgParas &cdg_paras,
   {
     if (a.step != b.step)
       return a.step < b.step;
-      else if (a.k != b.k)
+    else if (a.k != b.k)
       return a.k < b.k;
-      else
+    else
       return a.m < b.m;
-    };
-    
-    std::sort(next_m_data.begin(), next_m_data.end(), comp);
-    
-    std::sort(next_p_data.begin(), next_p_data.end(), comp);
-    
-    std::sort(l_data.begin(), l_data.end(), comp);
+  };
+
+  std::sort(next_m_data.begin(), next_m_data.end(), comp);
+
+  std::sort(next_p_data.begin(), next_p_data.end(), comp);
+
+  std::sort(l_data.begin(), l_data.end(), comp);
 
   EquityTreeBuildResult equity_tree_result =
       EquityTreeBuild(l_data, tree_result, cb_paras, cdg_paras, next_p_data,

@@ -116,7 +116,8 @@ void CbTreeBuildV2(const CbParas &cb_paras, const CdgParas &cdg_paras,
             Eigen::ArrayXXd::Zero(num_nodes, cb_paras.partition);
 
         int bool_flag = (i > 1) && coupon_info.is_coupon_paid[i - 1];
-
+        
+        #pragma omp parallel for
         for (int k = 0; k < num_nodes; ++k)
         {
             const int global_idx = idx_start + k;

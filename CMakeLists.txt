@@ -34,6 +34,12 @@ add_compile_options(
     -Wunused-parameter
 )
 
+find_package(OpenMP REQUIRED)
+
+if(OpenMP_CXX_FOUND)
+    target_link_libraries(convertible_bond PUBLIC OpenMP::OpenMP_CXX)
+endif()
+
 # --- NEW ---
 option(ENABLE_PROFILING "Enable gprof profiling" OFF) # Defaults to OFF
 

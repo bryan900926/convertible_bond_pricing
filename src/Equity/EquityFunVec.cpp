@@ -1,5 +1,6 @@
 #include "Eigen/Dense"
 #include <unsupported/Eigen/SpecialFunctions>
+#include <omp.h>
 
 #include "..\Pricing\CbModel.h"
 #include "EquityModel.h"
