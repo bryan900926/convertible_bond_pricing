@@ -1,5 +1,6 @@
 #include <Eigen/Dense>
 #include <vector>
+#include <iostream>
 #include <cmath>
 
 #include "..\Equity\EquityModel.h"
@@ -103,7 +104,7 @@ void CbTreeBuild(const CbParas &cb_paras, const CdgParas &cdg_paras,
     const double l_hat_first =
         (cdg_paras.delta + cdg_paras.sigma_v * cdg_paras.sigma_v / 2) /
             cdg_paras.lamda -
-        cdg_paras.v + cdg_paras.phi * vasciek_paras.r_bar;
+        cdg_paras.v + cdg_paras.phi * tree_result.alpha_result.thetas(n - 1);
     for (size_t i = n; i >= 1; --i)
     {
         const double dt = (i == 1) ? coupon_info.dt_first : cb_paras.dt_other;
@@ -243,6 +244,7 @@ void CbTreeBuild(const CbParas &cb_paras, const CdgParas &cdg_paras,
         std::swap(equity_now, equity_next);
         std::swap(map_now, map_next);
     }
+    // std::cout << b_next << std::endl;
     std::printf("Cb Tree Build Completed.\n");
     std::printf("Cb: %.6f\n", cb_next(0, 0));
     std::printf("Bond: %.6f\n", b_next(0, 0));

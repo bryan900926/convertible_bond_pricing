@@ -1,15 +1,16 @@
+#define DEBUG
 #include "..\Equity\EquityModel.h"
 #include "..\HullWhiteModel\HullWhiteModel.h"
 #include "CbModel.h"
 
-#include <iostream>
 #include <cmath>
 #include <cstddef>
 #include <cstdio>
 #include <limits>
+#include <iostream>
 #include <unordered_map>
 
-void CbTreePricing(const CbParas &cb_paras, const CdgParas &cdg_paras,
+FinalResult CbTreePricing(const CbParas &cb_paras, const CdgParas &cdg_paras,
                    const VasciekParas vasciek_paras)
 {
   CouponPaidInfo coupon_info =
@@ -31,7 +32,6 @@ void CbTreePricing(const CbParas &cb_paras, const CdgParas &cdg_paras,
   PzTreeResult pz_result = PzTreeBuild(coupon_info.total_steps, tree_result);
 
   const Eigen::ArrayXd &thetas = tree_result.alpha_result.thetas;
-
   const double y0 = std::log(cdg_paras.V0);
   const double x0 = std::log(cdg_paras.V0);
 
@@ -39,7 +39,11 @@ void CbTreePricing(const CbParas &cb_paras, const CdgParas &cdg_paras,
       cdg_paras.sigma_v * std::sqrt(1 - cb_paras.rho * cb_paras.rho);
   const double jump_first = sigma_x * std::sqrt(coupon_info.dt_first);
   const double jump_other = sigma_x * std::sqrt(cb_paras.dt_other);
-
+  if (cb_paras.if_const_r) {
+    tree_result.short_rate_tree = Eigen::ArrayXXd::Constant(
+        tree_result.short_rate_tree.rows(), tree_result.short_rate_tree.cols(),
+        0);
+  }
   std::vector<int> num_node_steps =
       std::vector<int>(coupon_info.total_steps + 1, 0);
   num_node_steps[0] = 1;
@@ -47,7 +51,7 @@ void CbTreePricing(const CbParas &cb_paras, const CdgParas &cdg_paras,
   std::vector<LNode> l_data;
   l_data.reserve(10000);
   l_data.emplace_back(LNode{1, static_cast<size_t>(pz_result.start_h), 0,
-                            cdg_paras.l0, cdg_paras.l0});
+                            cdg_paras.l0, cdg_paras.l0, 1});
 
   const std::array<int, 9> dm_vec = {-2, 0, 2, -2, 0, 2, -2, 0, 2};
 
@@ -70,16 +74,22 @@ void CbTreePricing(const CbParas &cb_paras, const CdgParas &cdg_paras,
   Eigen::ArrayXd scratch_root(cb_paras.partition);
   Eigen::ArrayXd scratch_next(cb_paras.partition);
 
-  const double l_hat_first =
-      (cdg_paras.delta + cdg_paras.sigma_v * cdg_paras.sigma_v / 2) /
-          cdg_paras.lamda -
-      cdg_paras.v + cdg_paras.phi * vasciek_paras.r_bar;
   const double miu_y_second =
       cdg_paras.delta + cdg_paras.sigma_v * cdg_paras.sigma_v / 2;
 
+  #ifdef DEBUG
+  double sigma_y_effect = 0.0;
+  double mean_effect = 0.0;
+  int sigma_y_effect_count = 0;
+  int mean_effect_count = 0;
+  #endif
+  
   for (size_t i = 1; i <= n; ++i)
   {
-
+    const double l_hat_first =
+      (cdg_paras.delta + cdg_paras.sigma_v * cdg_paras.sigma_v / 2) /
+          cdg_paras.lamda -
+      cdg_paras.v + cdg_paras.phi * thetas(i - 1);
     double jump = (i == 1) ? jump_first : jump_other;
     double dt = (i == 1) ? coupon_info.dt_first : cb_paras.dt_other;
     const Eigen::ArrayX3d &prob_hw = (i == 1)
@@ -96,14 +106,23 @@ void CbTreePricing(const CbParas &cb_paras, const CdgParas &cdg_paras,
       const size_t k_now = l_data[count].k;
       const double r_now = tree_result.short_rate_tree(k_now, i - 1);
       const double l_min_now = l_data[count].l_min;
+      const double cum_prob_now = l_data[count].cum_prob;
       const double l_max_now = l_data[count].l_max;
       const double l_hat =
           l_hat_first - r_now * (1 / cdg_paras.lamda + cdg_paras.phi);
-
       const double p_u_hw = prob_hw(k_now, 0);
       const double p_m_hw = prob_hw(k_now, 1);
       const double p_d_hw = prob_hw(k_now, 2);
-
+      double hw_sum = p_u_hw + p_m_hw + p_d_hw;
+      // #ifdef DEBUG
+      // if (std::abs(hw_sum - 1.0) > 1e-5) {
+      //   std::cout << "start_h: " << pz_result.start_h << std::endl;
+      //   std::cout << "nxt_r_idx:\n" << pz_result.nxt_r_idx << std::endl;
+      //   std::cout << "hw_tree\n" << tree_result.short_rate_tree << std::endl;
+      //   std::cout << prob_hw << std::endl;
+      //   exit(1);
+      // }
+      // #endif
       const double x_now = x0 + m_now * jump;
       const double y_now = y0 + (x_now - x0) +
                            cdg_paras.sigma_v * cb_paras.rho *
@@ -121,11 +140,10 @@ void CbTreePricing(const CbParas &cb_paras, const CdgParas &cdg_paras,
       const double a = b + 2 * jump;
       const double c = b - 2 * jump;
       const double D = (a - b) * (a - c) * (b - c);
-
-      const double p_u = (S1 * (b - c) + c * b * (b - c)) / D;
+      const double p_d = (S1 * (b - c) + c * b * (b - c)) / D;
       const double p_m =
           (S1 * (c - a) + a * c * (c - a)) / ((b - c) * (b - a) * (c - a));
-      const double p_d = 1 - p_u - p_m;
+      const double p_u = 1 - p_d - p_m;
       PNode p_node = {i,
                       k_now,
                       m_now,
@@ -135,20 +153,25 @@ void CbTreePricing(const CbParas &cb_paras, const CdgParas &cdg_paras,
       next_p_data.emplace_back(p_node);
       MNode m_node = {i, k_now, m_now, nxt_m};
       next_m_data.emplace_back(m_node);
-
       for (int j = 0; j < 9; ++j)
       {
         const int m_next = nxt_m + dm_vec[j];
         const size_t k_next = pz_result.nxt_r_idx(k_now, j / 3);
         const long long hash_val = (static_cast<long long>(m_next) << 32) | k_next;
         const auto search = look_up_map.find(hash_val);
+        const double transition_prob =
+            cum_prob_now * p_node.prob_matrix[2 - (j % 3)][j / 3];
         if (l_min_now > 0)
         {
-          if (search == look_up_map.end())
-          {
-            l_data.emplace_back(LNode{i + 1, k_next, m_next, l_min_now, l_min_now});
-            look_up_map[hash_val] = ++idx_total;
-          }
+          // if (search == look_up_map.end())
+          // {
+          //   l_data.emplace_back(LNode{i + 1, k_next, m_next, l_min_now,
+          //   l_min_now, transition_prob}); look_up_map[hash_val] =
+          //   ++idx_total;
+          // } else {
+          //   LNode &exist_node = l_data[look_up_map[hash_val]];
+          //   exist_node.cum_prob += transition_prob;
+          // }
           continue;
         }
 
@@ -163,13 +186,24 @@ void CbTreePricing(const CbParas &cb_paras, const CdgParas &cdg_paras,
         scratch_next = scratch_root +
                        cdg_paras.lamda * (l_hat - scratch_root) * dt -
                        (y_nxt - y_now - miu_y * dt);
+#ifdef DEBUG
+        sigma_y_effect += std::abs(y_nxt - y_now - miu_y * dt);
+        mean_effect += std::abs(cdg_paras.lamda * (l_hat - scratch_root.mean()) * dt);
+        sigma_y_effect_count++;
+        mean_effect_count++;
+#endif
         const double l_next_min = scratch_next.minCoeff();
         const double l_next_max = scratch_next.maxCoeff();
-
+        // #ifdef DEBUG
+        // std::cout << scratch_root << std::endl;
+        // std::cout << scratch_next << std::endl;
+        // std::cout << "l_next_min: " << l_next_min << ", l_next_max: " << l_next_max
+        //           << std::endl;
+        // #endif
         if (search == look_up_map.end())
         {
           l_data.emplace_back(
-              LNode{i + 1, k_next, m_next, l_next_min, l_next_max});
+              LNode{i + 1, k_next, m_next, l_next_min, l_next_max, transition_prob});
           look_up_map[hash_val] = ++idx_total;
         }
         else
@@ -177,6 +211,7 @@ void CbTreePricing(const CbParas &cb_paras, const CdgParas &cdg_paras,
           LNode &exist_node = l_data[look_up_map[hash_val]];
           exist_node.l_min = std::min(exist_node.l_min, l_next_min);
           exist_node.l_max = std::max(exist_node.l_max, l_next_max);
+          exist_node.cum_prob += transition_prob;
         }
       }
     }
@@ -195,14 +230,26 @@ void CbTreePricing(const CbParas &cb_paras, const CdgParas &cdg_paras,
   };
 
   std::sort(next_m_data.begin(), next_m_data.end(), comp);
-
   std::sort(next_p_data.begin(), next_p_data.end(), comp);
-
   std::sort(l_data.begin(), l_data.end(), comp);
 
   EquityTreeBuildResult equity_tree_result =
       EquityTreeBuild(l_data, tree_result, cb_paras, cdg_paras, next_p_data,
                       next_m_data, vasciek_paras, coupon_info);
-  CbTreeBuildV2(cb_paras, cdg_paras, vasciek_paras, equity_tree_result,
+
+  // Clear large intermediate data to free memory
+  std::vector<PNode>().swap(next_p_data);
+  std::vector<MNode>().swap(next_m_data);
+  std::vector<LNode>().swap(l_data);
+
+#ifdef DEBUG
+  std::cout << "Average sigma_y effect: " << sigma_y_effect / sigma_y_effect_count << std::endl;
+  std::cout << "Average mean effect: " << mean_effect / mean_effect_count << std::endl;
+#endif
+
+  // #ifdef DEBUG
+  // std::cout << equity_tree_result.l_data_partition.col(0) << std::endl;
+  // #endif
+  return CbTreeBuildV2(cb_paras, cdg_paras, vasciek_paras, equity_tree_result,
                 tree_result, coupon_info, pz_result, num_node_steps);
 }

@@ -9,7 +9,7 @@ constexpr double EPSILON = 1e-9;
 CouponPaidInfo CouponPaidCalc(
     const double T,
     const double dt,
-    const int paid_cycle)
+    const double paid_cycle)
 {
     int n = static_cast<int>(std::floor((T / dt) + EPSILON));
 
