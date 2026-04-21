@@ -1,9 +1,8 @@
 #include "Eigen/Dense"
-#include <vector>
 #include <iostream>
+#include <vector>
 
 #include "..\Pricing\CbModel.h"
-#include "..\Util\Timer.h"
 #include "EquityModel.h"
 
 EquityTreeBuildResult EquityTreeBuild(const std::vector<LNode> &l_data,
@@ -15,7 +14,6 @@ EquityTreeBuildResult EquityTreeBuild(const std::vector<LNode> &l_data,
                                       const VasciekParas &vasciek_paras,
                                       const CouponPaidInfo &coupon_info)
 {
-    Timer time("Equity Tree Build");
     const Eigen::ArrayXd ratio_min_vec =
         Eigen::ArrayXd::LinSpaced(cb_paras.partition, 1.0, 0.0);
     const Eigen::ArrayXd ratio_max_vec =
@@ -38,6 +36,8 @@ EquityTreeBuildResult EquityTreeBuild(const std::vector<LNode> &l_data,
     Eigen::ArrayXd theta_data_partition = Eigen::ArrayXd::Zero(l_data.size());
     Eigen::ArrayXd theta1_data_partition = Eigen::ArrayXd::Zero(l_data.size());
     Eigen::ArrayXd v_data = Eigen::ArrayXd::Zero(l_data.size());
+    Eigen::ArrayXd t_vec = Eigen::ArrayXd::Zero(l_data.size());
+    Eigen::ArrayXd alpha_vec = Eigen::ArrayXd::Zero(l_data.size());
 
     // other steps
     for (int h = 0; h < l_data.size(); ++h)
@@ -47,6 +47,8 @@ EquityTreeBuildResult EquityTreeBuild(const std::vector<LNode> &l_data,
         idx_vec(h, 2) = l_data[h].k;
 
         const size_t t = (l_data[h].step > 2) ? l_data[h].step - 2 : 0;
+        t_vec(h) = t * cb_paras.dt_other + coupon_info.dt_first;
+        alpha_vec(h) = tree_result.alpha_result.alphas(t);
         const Eigen::ArrayXd l_vec =
             l_data[h].l_min * ratio_min_vec + l_data[h].l_max * ratio_max_vec;
 
@@ -56,7 +58,7 @@ EquityTreeBuildResult EquityTreeBuild(const std::vector<LNode> &l_data,
         const double v_t =
             std::exp(y0 + (x_t - x0) +
                      cdg_paras.sigma_v * cb_paras.rho * (r_t - vasciek_paras.r0) /
-                         vasciek_paras.sigma_r);
+                     vasciek_paras.sigma_r);
 
         l_data_partition.row(h).segment(0, cb_paras.partition) = l_vec.transpose();
 
@@ -70,16 +72,15 @@ EquityTreeBuildResult EquityTreeBuild(const std::vector<LNode> &l_data,
             nxt_m(h, 0) = next_m_data[h].nxt_m;
             for (int j = 0; j < 9; ++j)
             {
-                nxt_p(h, j) = next_p_data[h].prob_matrix[j / 3][j % 3];
+              nxt_p(h, j) = next_p_data[h].prob_matrix[2 - (j % 3)][j / 3];
             }
         }
     }
     const EquityContext ctx = EquityContextVec(
         cb_paras.dt_other, l_data_partition, r_data_partition, theta_data_partition * vasciek_paras.kappa,
-        theta1_data_partition * vasciek_paras.kappa, cb_paras, cdg_paras, vasciek_paras);
+        theta1_data_partition * vasciek_paras.kappa, cb_paras, cdg_paras, vasciek_paras, alpha_vec, t_vec);
     Eigen::ArrayXXd equity_tree =
         EquityFunVec(cb_paras, ctx, v_data) / cb_paras.NS;
-
     // first step
     {
         Eigen::ArrayXd r_data_first = Eigen::ArrayXd::Zero(1);
@@ -98,7 +99,7 @@ EquityTreeBuildResult EquityTreeBuild(const std::vector<LNode> &l_data,
             std::exp(y0 + (x_t - x0) +
                      cdg_paras.sigma_v * cb_paras.rho * (r_t - vasciek_paras.r0) /
                          vasciek_paras.sigma_r);
-
+        
         l_data_first.row(0).segment(0, cb_paras.partition) = l_vec.transpose();
 
         r_data_first(0) = r_t;
@@ -106,12 +107,11 @@ EquityTreeBuildResult EquityTreeBuild(const std::vector<LNode> &l_data,
         theta1_data_first(0) = 0;
         v_data_first(0) = v_t;
         equity_tree(0, Eigen::all) =
-            EquityFunVec(cb_paras,
-                         EquityContextVec(coupon_info.dt_first, l_data_first, r_data_first,
+        EquityFunVec(cb_paras,
+                    EquityContextVec(coupon_info.dt_first, l_data_first, r_data_first,
                                           theta_data_first, theta1_data_first,
-                                          cb_paras, cdg_paras, vasciek_paras),
-                         v_data_first) /
-            cb_paras.NS;
+                                          cb_paras, cdg_paras, vasciek_paras, alpha_vec.head(1), t_vec.head(1)),
+                    v_data_first) / cb_paras.NS;
     }
     return {equity_tree, idx_vec, nxt_m, nxt_p, l_data_partition};
 }

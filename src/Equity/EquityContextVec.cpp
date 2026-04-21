@@ -3,7 +3,6 @@
 #include "Eigen/Dense"
 #include "EquityModel.h"
 #include <algorithm>
-#include <iostream>
 
 EquityContext EquityContextVec(const double dt, const Eigen::ArrayXXd &l_t_arr,
                                const Eigen::ArrayXd &r_t_arr,
@@ -11,7 +10,9 @@ EquityContext EquityContextVec(const double dt, const Eigen::ArrayXXd &l_t_arr,
                                const Eigen::ArrayXd &theta_t1_arr,
                                const CbParas &cb_paras,
                                const CdgParas &cdg_paras,
-                               const VasciekParas &vp) {
+                               const VasciekParas &vp,
+                               const Eigen::ArrayXd &alpha_vec,
+                               const Eigen::ArrayXd &t_vec) {
   const double B_kappa_dt = Calc_Bk(vp.kappa, dt);
   const double B_2kappa_dt = Calc_Bk(2.0 * vp.kappa, dt);
 
@@ -28,11 +29,17 @@ EquityContext EquityContextVec(const double dt, const Eigen::ArrayXXd &l_t_arr,
       cdg_paras.v;
   const double b = -1.0 / cdg_paras.lamda - cdg_paras.phi;
 
-  const Eigen::ArrayXd bond_log_arr =
-      (vp.r_bar - vp.sigma_r * vp.sigma_r / (2.0 * vp.kappa * vp.kappa)) *
-          (B_kappa_dt - dt) -
-      (vp.sigma_r * vp.sigma_r / (4.0 * vp.kappa)) * (B_kappa_dt * B_kappa_dt) -
-      B_kappa_dt * r_t_arr;
+  const double b_t_t_plus_dt = (1 - exp(-vp.kappa * dt)) / vp.kappa;
+  const Eigen::ArrayXd p_0_t_plus_dt = Eigen::exp(-(dt + t_vec) * r_t_arr);
+  const Eigen::ArrayXd p_0_t = Eigen::exp(-t_vec * r_t_arr);
+  const Eigen::ArrayXd a_mid_part =
+      1 / (4 * vp.kappa * vp.kappa * vp.kappa) * vp.sigma_r * vp.sigma_r *
+      (Eigen::exp(-vp.kappa * (dt + t_vec)) * -Eigen::exp(-vp.kappa * t_vec))
+          .pow(2) * (Eigen::exp(2 * vp.kappa * t_vec) - 1);
+  const Eigen::ArrayXd a_t_t_plus_dt =
+      Eigen::exp(Eigen::log(p_0_t_plus_dt / p_0_t) + b_t_t_plus_dt * alpha_vec - a_mid_part);
+                 
+  const Eigen::ArrayXd bond_log_arr = a_t_t_plus_dt * Eigen::exp(-b_t_t_plus_dt * r_t_arr);
 
   const Eigen::ArrayXd m_t_arr =
       (vp.sigma_r * vp.sigma_r / (2.0 * vp.kappa * vp.kappa)) *
