@@ -112,19 +112,18 @@ HullWhiteTreeAlpha(int n, int non_first, int non_other, double dt_first,
       ProbCalcV2(non_first, jmax_first, n, a_first);
   const Eigen::ArrayX3d prob_other_final =
       ProbCalcV2(non_other, jmax_other, n, a_other);
-
   Eigen::ArrayXd thetas = Eigen::ArrayXd::Zero(n);
   if (n == 1) {
-    thetas(0) = -kappa * alphas(0);
+    thetas(0) = kappa * alphas(0);
   } else {
-    thetas(0) = (alphas(1) - alphas(0)) / dt_vec(0) - kappa * alphas(0);
+    thetas(0) = (alphas(1) - alphas(0)) / dt_vec(0) + kappa * alphas(0);
     for (int i = 1; i < n - 1; ++i) {
       const double d_alpha_dt =
           (alphas(i + 1) - alphas(i - 1)) / (dt_vec(i - 1) + dt_vec(i));
       thetas(i) = d_alpha_dt - kappa * alphas(i);
     }
     thetas(n - 1) =
-        (alphas(n - 1) - alphas(n - 2)) / dt_vec(n - 2) - kappa * alphas(n - 1);
+        (alphas(n - 1) - alphas(n - 2)) / dt_vec(n - 2) + kappa * alphas(n - 1);
   }
   return {std::move(prob_first_final), std::move(prob_other_final),
           std::move(alphas), std::move(thetas)};

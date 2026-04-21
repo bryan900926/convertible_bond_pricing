@@ -7,7 +7,6 @@ Eigen::ArrayXXd HullWhiteTreeShortRate(const int n, const int j_max_first, const
                                        const Eigen::ArrayXd &alphas, const Eigen::ArrayXXd &r_tree)
 {
     Eigen::ArrayXXd short_rate_tree = Eigen::ArrayXXd::Zero(2 * n + 1, n);
-
     for (int i = 0; i < n; ++i)
     {
         const int jmax_local = (i == 0) ? j_max_first : j_max_other;

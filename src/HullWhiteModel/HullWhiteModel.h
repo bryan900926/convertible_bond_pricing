@@ -35,7 +35,7 @@ HullWhiteAlphaResult HullWhiteTreeAlpha(
 
 struct HullWhiteTreeResult
 {
-    const Eigen::ArrayXXd short_rate_tree;
+    Eigen::ArrayXXd short_rate_tree;
     const HullWhiteAlphaResult alpha_result;
     const int j_max_first;
     const int j_max_other;

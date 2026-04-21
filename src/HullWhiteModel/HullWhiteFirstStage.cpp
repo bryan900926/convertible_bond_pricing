@@ -7,7 +7,7 @@ Eigen::ArrayXXd HullWhiteFirstStage(
 {
     Eigen::ArrayXXd hw_first_stage = Eigen::ArrayXXd::Zero(2 * n + 1, n);
     const double dr_first = sigma_r * std::sqrt(3 * dt_first);
-    const double dr_other = sigma_r * std::sqrt(3 * dt_first);
+    const double dr_other = sigma_r * std::sqrt(3 * dt_other);
     Eigen::ArrayXd j_dr_vec;
 
     for (int i = 1; i < n; ++i)

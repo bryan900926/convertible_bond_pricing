@@ -34,15 +34,15 @@ struct EquityContext
     const Eigen::ArrayXd pt_arr;
 };
 
-EquityContext EquityContextVec(
-    const double dt,
-    const Eigen::ArrayXXd &l_t_arr,
-    const Eigen::ArrayXd &r_t_arr,
-    const Eigen::ArrayXd &theta_t_arr,
-    const Eigen::ArrayXd &theta_t1_arr,
-    const CbParas &cb_paras,
-    const CdgParas &cdg_paras,
-    const VasciekParas &vp);
+EquityContext EquityContextVec(const double dt, const Eigen::ArrayXXd &l_t_arr,
+                               const Eigen::ArrayXd &r_t_arr,
+                               const Eigen::ArrayXd &theta_t_arr,
+                               const Eigen::ArrayXd &theta_t1_arr,
+                               const CbParas &cb_paras,
+                               const CdgParas &cdg_paras,
+                               const VasciekParas &vp,
+                               const Eigen::ArrayXd &alpha_vec,
+                               const Eigen::ArrayXd &t_vec);
 
 Eigen::ArrayXXd EquityFunVec(
     const CbParas &cb_paras,
@@ -65,5 +65,6 @@ EquityTreeBuildResult EquityTreeBuild(const std::vector<LNode> &l_data,
                                       const std::vector<PNode> &next_p_data,
                                       const std::vector<MNode> &next_m_data,
                                       const VasciekParas &vasciek_paras,
-                                      const CouponPaidInfo &coupon_info);
+                                      const CouponPaidInfo &coupon_info
+                                      );
 

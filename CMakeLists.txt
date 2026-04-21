@@ -39,18 +39,16 @@ find_package(OpenMP REQUIRED)
 if(OpenMP_CXX_FOUND)
     target_link_libraries(convertible_bond PUBLIC OpenMP::OpenMP_CXX)
 endif()
-
-# --- NEW ---
-option(ENABLE_PROFILING "Enable gprof profiling" OFF) # Defaults to OFF
-
-if (CMAKE_CXX_COMPILER_ID MATCHES "GNU" AND ENABLE_PROFILING)
-    message(STATUS ">> PROFILING ENABLED: Code will be slower but trackable <<")
-    target_compile_options(convertible_bond PRIVATE -pg)
-    target_link_options(convertible_bond PRIVATE -pg -no-pie)
-else()
-    message(STATUS ">> PROFILING DISABLED: Max speed mode <<")
-    # Add Optimization flags for Release mode
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    message(STATUS ">> PROFILING DISABLED: Max speed mode (Release) <<")
+    
+    # Apply max speed flags ONLY in release
     target_compile_options(convertible_bond PRIVATE -O3 -march=native)
+    
+    # Disable Eigen's internal bounds checking for extra speed
+    target_compile_definitions(convertible_bond PRIVATE NDEBUG)
+elseif(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    message(STATUS ">> DEBUG MODE: Unoptimized, with debug symbols <<")
+    target_compile_options(convertible_bond PRIVATE -O0 -g)
 endif()
-
 target_link_libraries(convertible_bond PRIVATE Eigen3::Eigen)
