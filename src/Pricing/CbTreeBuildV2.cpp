@@ -98,10 +98,6 @@ FinalResult CbTreeBuildV2(const CbParas &cb_paras, const CdgParas &cdg_paras,
     surv_next = is_pos.select(0.0, surv_next);
     Eigen::ArrayXd dm_vec(9);
     dm_vec << -2, 0, 2, -2, 0, 2, -2, 0, 2;
-    const double l_hat_first =
-        (cdg_paras.delta + cdg_paras.sigma_v * cdg_paras.sigma_v / 2) /
-            cdg_paras.lamda -
-        cdg_paras.v + cdg_paras.phi * tree_result.alpha_result.thetas(n - 1);
     for (size_t i = n; i >= 1; --i)
     {
         const double dt = (i == 1) ? coupon_info.dt_first : cb_paras.dt_other;
@@ -120,6 +116,11 @@ FinalResult CbTreeBuildV2(const CbParas &cb_paras, const CdgParas &cdg_paras,
 
         int bool_flag = (i > 1) && coupon_info.is_coupon_paid[i - 1];
         
+        const double l_hat_first =
+        (cdg_paras.delta + cdg_paras.sigma_v * cdg_paras.sigma_v / 2) /
+            cdg_paras.lamda -
+        cdg_paras.v + cdg_paras.phi * tree_result.alpha_result.thetas(i - 1);
+
         #pragma omp parallel for
         for (int k = 0; k < num_nodes; ++k)
         {
