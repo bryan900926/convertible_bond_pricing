@@ -13,7 +13,7 @@
 std::unordered_map<std::string, std::unordered_map<std::string, double>> market_data;
 
 #ifdef DEBUG
-const std::vector<double> dts = { 1.0 / 24 };
+const std::vector<double> dts = { 1.0 / 12 };
 #else
 const std::vector<double> dts = { 1, 1.0 / 2, 1.0 / 3, 1.0 / 12, 1.0 / 24, 1.0 / 36, 1.0 / 48 };
 #endif
@@ -229,6 +229,7 @@ int main() {
         VasciekParas vas = { 0.168347138448497, 0.123838434970359, 0.576508365942268, 0.00391899840867379 };
         vas = { 2.73186466686729, 0.0557494010613996, 0.120590482306319, 0.0326238320383245 };
         run_pricing_suite("FSLY", cb, cdg, vas);
+        DefaultTest(cb, cdg, vas, 10000);
     };
     // market cb :56.758 stock price : 7.27
     auto price_VERI = []() {
@@ -240,20 +241,23 @@ int main() {
         run_pricing_suite("VERI", cb, cdg, vas);
     };
 
-    // auto test = []() {
-    //     CbParas cb = { 18.0, 0.2725, 100, 0.4456, 3.67815, 34756000, 1437500, 130, 20, 0.0254, 20, false, 0.02625, 1.0/52, 1 };
-    //     CdgParas cdg = {  0.3347, 9.41360, -0.9046, 1440140802, 0.025091036, 0.27250, 2.05071};
-    //     VasciekParas vas = { 0.3562, 0.0208, 0.0520, 0.0021 };
-    //     CbTreePricing(cb, cdg, vas);
-    // };
+    auto test = []() {
+        std::vector<CallInfo> calls = {CallInfo("2024-11-20", 100.0)};
+        CallSchedule call_schedule = CallSchedule::Create(calls, "2022-11-15");
+        CbParas cb = { 4.0, 0.2725, 100, 0.4456, 3.67815, 34756000, 1437500, 130, 20, 0.0254, 20, false, 0.02625, 1.0/52, 1, call_schedule };
+        CdgParas cdg = {  0.3347, 9.41360, -0.9046, 1440140802, 0.025091036, 0.27250, 2.05071};
+        VasciekParas vas = { 0.3562, 0.0208, 0.0520, 0.0021 };
+        CbTreePricing(cb, cdg, vas);
+        DefaultTest(cb, cdg, vas, 10000);
+    };
     // test();
     // price_LAB();
     // price_EEFT();
     // price_DHR();
     // price_COLL();
     // price_EXPE();
-    price_SPOT();
-    // price_FSLY();
+    // price_SPOT();
+    price_FSLY();
     // price_VERI();
     
     return 0;
