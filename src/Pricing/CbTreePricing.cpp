@@ -1,4 +1,4 @@
-#define DEBUG
+// #define DEBUG
 #include "..\Equity\EquityModel.h"
 #include "..\HullWhiteModel\HullWhiteModel.h"
 #include "CbModel.h"
