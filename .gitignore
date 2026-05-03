@@ -49,3 +49,7 @@ Thumbs.db
 *.gdb
 *.out
 *.txt
+
+
+**/third_party
+**/temp_cache
