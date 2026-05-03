@@ -2,8 +2,6 @@
 #include <Eigen/Dense>
 #include <cstdio>
 
-#include <iostream>
-
 Eigen::ArrayX3d ProbCalc(int non, int j_max, double dt, double kappa) {
   Eigen::ArrayX3d probs(non, 3);
   Eigen::ArrayXd j_vec =

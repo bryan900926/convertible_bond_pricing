@@ -1,7 +1,6 @@
 #include <Eigen/Dense>
 #include <vector>
 #include <cmath>
-#include <iostream>
 
 #include "..\Equity\EquityModel.h"
 #include "CbModel.h"
@@ -20,11 +19,12 @@ FinalResult CbTreeBuildV2(const CbParas &cb_paras, const CdgParas &cdg_paras,
     const Eigen::ArrayX3i &idx_vec =
         equity_tree_result.idx_vec; // [[step,m,k],...]
     const Eigen::ArrayXi &nxt_m = equity_tree_result.nxt_m;
+    GaussHermiteResult gh_result = compute_gauss_hermite_rule(cb_paras.qdt);
     const Eigen::Array<double, Eigen::Dynamic, 9> &nxt_p =
         equity_tree_result.nxt_p;
     const Eigen::ArrayXXd &l_data = equity_tree_result.l_data_partition;
     const Eigen::ArrayX3i &nxt_r_idx = pz_result.nxt_r_idx;
-
+    const auto& thetas = tree_result.alpha_result.thetas;
     const double sigma_x =
         cdg_paras.sigma_v * std::sqrt(1 - cb_paras.rho * cb_paras.rho);
     const double jump_first = sigma_x * std::sqrt(coupon_info.dt_first),
@@ -104,7 +104,7 @@ FinalResult CbTreeBuildV2(const CbParas &cb_paras, const CdgParas &cdg_paras,
         const double jump = (i == 1) ? jump_first : jump_other;
         const int idx_start = (i > 1) ? cum_node_steps[i - 2] : 0;
         const int num_nodes = num_node_steps[i - 1];
-        const double call_price = cb_paras.call_schedule.GetActiveCallPrice(coupon_info.dt_first + (i - 1) * cb_paras.dt_other);
+        const double call_price = cb_paras.call_schedule.GetActiveCallOneTime(coupon_info.dt_first + (i - 1) * cb_paras.dt_other);
 
         Eigen::ArrayXXd b_now =
             Eigen::ArrayXXd::Zero(num_nodes, cb_paras.partition);

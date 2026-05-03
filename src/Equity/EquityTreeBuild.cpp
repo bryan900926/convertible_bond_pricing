@@ -1,5 +1,4 @@
 #include "Eigen/Dense"
-#include <iostream>
 #include <vector>
 
 #include "..\Pricing\CbModel.h"

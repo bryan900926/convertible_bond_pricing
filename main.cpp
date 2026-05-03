@@ -1,4 +1,3 @@
-#define DEBUG
 #include <Eigen/Dense>
 #include "src/HullWhiteModel/HullWhiteModel.h"
 #include "src/Pricing/CbModel.h"
@@ -92,6 +91,14 @@ bool load_market_data(const std::string& filepath) {
     }
     return true;
 }
+void crash_handler(int signal_number) {
+    std::cerr << "\n[CRASH LOG] Program died from OS Signal: " << signal_number << "\n";
+    if (signal_number == SIGSEGV) std::cerr << "Reason: Segmentation Fault (Bad Memory Access)\n";
+    if (signal_number == SIGFPE)  std::cerr << "Reason: Arithmetic Exception (Math Error)\n";
+    if (signal_number == SIGILL)  std::cerr << "Reason: Illegal Instruction (Bad CPU architecture flag)\n";
+    
+    std::exit(signal_number);
+}
 
 // ==========================================
 // CORE PRICING ENGINE
@@ -117,18 +124,21 @@ void run_pricing_suite(const std::string& ticker, CbParas cb, CdgParas cdg, Vasc
     }
     
     // Add market baseline headers if needed, otherwise standard headers
-    data << "dt,cb_price,e_forward_price,e_backward_price,default_prob\n";
+    data << "dt,cb_price,e_forward_price,e_backward_price,default_prob,dp(monte_carlo)\n";
 
     // 3. Execute Pricing Loop
     std::cout << "Pricing " << ticker << "...\n";
     for (double dt : dts) {
         cb.dt_other = dt;
+        double dp = DefaultTest(cb, cdg, vas, 1000);
         try {
             FinalResult res = CbTreePricing(cb, cdg, vas);
             data << dt << "," << res.cb_price << "," 
                  << res.equity_forward_price << "," 
                  << res.equity_backward_price << "," 
-                 << res.default_prob << "\n";
+                 << res.default_prob << ","
+                 << dp 
+                 << "\n";
         } catch (const std::exception& e) {
             std::cerr << "  -> Error pricing " << ticker << " with dt=" << dt << ": " << e.what() << "\n";
         }
@@ -144,6 +154,10 @@ int main() {
     if (!load_market_data("D:\\Users\\YYLee\\cb_cpp\\res_table.txt")) {
         return 1;
     }
+    signal(SIGSEGV, crash_handler); // Memory violations
+    signal(SIGFPE, crash_handler);  // Math crashes
+    signal(SIGABRT, crash_handler); // Abort calls
+    signal(SIGILL, crash_handler);  // Illegal instructions
     auto price_LAB = []() {
         std::vector<CallInfo> calls = {CallInfo("2016-02-01", 130.0), CallInfo("2021-02-05", 100.0)};
         CallSchedule call_schedule = CallSchedule::Create(calls, "2016-02-01");
@@ -156,7 +170,7 @@ int main() {
     auto price_EEFT = []() {
         std::vector<CallInfo> calls = {CallInfo("2022-09-20", 130.0), CallInfo("2025-03-20", 100.0)};
         CallSchedule call_schedule = CallSchedule::Create(calls, "2021-03-15");
-        CbParas cb = { 28, 0, 100, 0.4456, 0.52987, 52753000, 4522280, INT_MAX, 20, 0, 20, false, 0.0075, 1.0/12, 1, call_schedule};
+        CbParas cb = { 28, 0, 100, 0.4456, 0.52987, 52753000, 4522280, INT_MAX, 20, 0, 20, false, 0.0075, 1.0/6, 1, call_schedule};
         CdgParas cdg = { 0.7, 0, std::log(0.28741741636296036), 0, 0.003567945, 0, 1.81 };
         VasciekParas vas = { 0.22336291527447, 0.0339962229038466, 0.0381091909084148, 0.000879559544106292 };
         run_pricing_suite("EEFT", cb, cdg, vas);
@@ -242,22 +256,36 @@ int main() {
     };
 
     auto test = []() {
+        time_t timestamp;
+        time(&timestamp);
+        std::cout << ctime(&timestamp);
         std::vector<CallInfo> calls = {CallInfo("2024-11-20", 100.0)};
         CallSchedule call_schedule = CallSchedule::Create(calls, "2022-11-15");
-        CbParas cb = { 4.0, 0.2725, 100, 0.4456, 3.67815, 34756000, 1437500, 130, 20, 0.0254, 20, false, 0.02625, 1.0/52, 1, call_schedule };
-        CdgParas cdg = {  0.3347, 9.41360, -0.9046, 1440140802, 0.025091036, 0.27250, 2.05071};
-        VasciekParas vas = { 0.3562, 0.0208, 0.0520, 0.0021 };
-        CbTreePricing(cb, cdg, vas);
-        DefaultTest(cb, cdg, vas, 10000);
+        CbParas cb = {12, 0.2725, 100, 0.4456, 3.67815, 34756000, 1437500, 130, 20, 0.0254, 20, false, 0.02625, 1.0/4, 1, call_schedule };
+        CdgParas cdg = {0.3347,      9.41360,  -0.9046, 1440140802,
+                        0.025091036, 0.027250, 1.0};
+
+        VasciekParas vas = {0.3562, 0.0208, 0.0520, 0.0021};
+        // CbTreePricing(cb, cdg, vas);
+        try {
+            CbTreePricingMemoSave(cb, cdg, vas);
+        }
+        catch (const std::exception& e) {
+            std::cerr << "Error occurred: " << e.what() << std::endl;
+        }
+        std::cout << "Done CbTreePricingMemoSave\n";
+        std::cout << ctime(&timestamp);
+        // DefaultTest(cb, cdg, vas, 10000);
+        // DefaultTestV1(cb, cdg, vas, 10000);
     };
-    // test();
+    test();
     // price_LAB();
     // price_EEFT();
     // price_DHR();
     // price_COLL();
     // price_EXPE();
     // price_SPOT();
-    price_FSLY();
+    // price_FSLY();
     // price_VERI();
     
     return 0;
