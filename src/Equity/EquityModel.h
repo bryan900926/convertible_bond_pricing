@@ -4,6 +4,8 @@
 #include <Eigen/Dense>
 #include "..\Pricing\CbModel.h"
 
+typedef Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> ArrayXXdRowMajor;
+
 double FormulaFastScalar(double M, double N, double Cxx, double Cyy, double corr_xy, const Eigen::ArrayXd &e_arr, const Eigen::ArrayXd &w_arr);
 
 double Calc_Bk(double k, double t);
@@ -51,11 +53,17 @@ Eigen::ArrayXXd EquityFunVec(
 
 struct EquityTreeBuildResult
 {
-    const Eigen::ArrayXXd equity_tree;
+    Eigen::ArrayXXd equity_tree;
     const Eigen::ArrayX3i idx_vec;
     const Eigen::ArrayXi nxt_m;
     const Eigen::Array<double, Eigen::Dynamic, 9> nxt_p;
-    const Eigen::ArrayXXd l_data_partition;
+    Eigen::ArrayXXd l_data_partition;
+};
+
+struct EquityTreeBuildResultMemoSave
+{
+    Eigen::ArrayXXd equity_tree;
+    ArrayXXdRowMajor l_data_partition;
 };
 
 EquityTreeBuildResult EquityTreeBuild(const std::vector<LNode> &l_data,
@@ -68,3 +76,10 @@ EquityTreeBuildResult EquityTreeBuild(const std::vector<LNode> &l_data,
                                       const CouponPaidInfo &coupon_info
                                       );
 
+EquityTreeBuildResultMemoSave EquityTreeBuildMemoSave(
+                                      const std::vector<PackedNode> &data,
+                                      const HullWhiteTreeResult &tree_result,
+                                      const CbParas &cb_paras,
+                                      const CdgParas &cdg_paras,
+                                      const VasciekParas &vasciek_paras,
+                                      const CouponPaidInfo &coupon_info);

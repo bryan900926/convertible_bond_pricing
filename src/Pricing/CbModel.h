@@ -62,6 +62,12 @@ public:
         }
         return active_price;
     }
+    double GetActiveCallOneTime(double current_time_in_days) {
+        if (_current_index < _call_infos.size() && current_time_in_days >= _call_infos[_current_index].digit_date) {
+            return _call_infos[_current_index++].call_price;
+        }
+        return std::numeric_limits<double>::max();
+    }
 };
 struct CbParas {
   double T;
@@ -79,7 +85,7 @@ struct CbParas {
   double coupon_rate;
   double dt_other;
   double paid_cycle;
-  CallSchedule call_schedule;
+  mutable CallSchedule call_schedule;
 };
 
 struct CdgParas {
@@ -115,6 +121,18 @@ struct MNode {
   int nxt_m;
 };
 
+struct PackedNode {
+  int step;
+  size_t k;
+  int m;
+  double l_min;
+  double l_max;
+  double p_x_up;
+  double p_x_mid;
+  double p_x_down;
+  int nxt_middle_m;
+};
+
 struct CouponPaidInfo {
   const int total_steps;
   const std::vector<bool> is_coupon_paid;
@@ -127,6 +145,10 @@ struct FinalResult {
   double equity_backward_price;
 };
 
+struct FinalResultMemoSave {
+  double cb_price;
+  double default_prob;
+};
 
 CouponPaidInfo CouponPaidCalc(const double T, const double dt,
                               const double paid_cycle);
@@ -134,16 +156,12 @@ CouponPaidInfo CouponPaidCalc(const double T, const double dt,
 FinalResult CbTreePricing(const CbParas &cb_paras, const CdgParas &cdg_paras,
                    const VasciekParas vasciek_paras);
 
-Eigen::ArrayXi FindIndices(const Eigen::Array<bool, Eigen::Dynamic, 1> &mask);
-struct EquityTreeBuildResult;
+FinalResultMemoSave CbTreePricingMemoSave(const CbParas &cb_paras, const CdgParas &cdg_paras,
+                   const VasciekParas& vasciek_paras);
 
-void CbTreeBuild(const CbParas &cb_paras, const CdgParas &cdg_paras,
-                 const VasciekParas &vasciek_paras,
-                 const EquityTreeBuildResult &equity_tree_result,
-                 const HullWhiteTreeResult &tree_result,
-                 const CouponPaidInfo &coupon_info,
-                 const PzTreeResult &pz_result,
-                 const std::vector<int> &num_node_steps);
+Eigen::ArrayXi FindIndices(const Eigen::Array<bool, Eigen::Dynamic, 1> &mask);
+
+struct EquityTreeBuildResult;
 
 void FillMap(Eigen::ArrayXi &map, const int step,
              const Eigen::ArrayX3i &idx_vec,
@@ -155,9 +173,18 @@ Eigen::ArrayXd DoInterp(const Eigen::ArrayXd &val1, const Eigen::ArrayXd &val2,
                         const Eigen::ArrayXd &weight);
 
 FinalResult CbTreeBuildV2(const CbParas &cb_paras, const CdgParas &cdg_paras,
-                     const VasciekParas &vasciek_paras,
-                     const EquityTreeBuildResult &equity_tree_result,
-                     const HullWhiteTreeResult &tree_result,
-                     const CouponPaidInfo &coupon_info,
-                     const PzTreeResult &pz_result,
-                     const std::vector<int> &num_node_steps);
+                          const VasciekParas &vasciek_paras,
+                          const EquityTreeBuildResult &equity_tree_result,
+                          const HullWhiteTreeResult &tree_result,
+                          const CouponPaidInfo &coupon_info,
+                          const PzTreeResult &pz_result,
+                          const std::vector<int> &num_node_steps);
+
+ FinalResultMemoSave CbTreeBuildMemoSave(
+                         const CbParas &cb_paras,
+                         const CdgParas &cdg_paras,
+                         const VasciekParas &vasciek_paras,
+                         const HullWhiteTreeResult &tree_result,
+                         const CouponPaidInfo &coupon_info,
+                         const PzTreeResult &pz_result
+);
