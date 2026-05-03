@@ -63,8 +63,8 @@ Eigen::ArrayXXd EquityFunVec(const CbParas &cb_paras, const EquityContext &ctx,
       d1_arr = d1_static + (d1_sign_h * z);
       d2_arr = d2_static + (d2_sign_h * z); // Optimized derivation
 
-      d1_arr = 0.5 * (1.0 + (d1_arr * SQRT_1_2).erf());
-      d2_arr = 0.5 * (1.0 + (d2_arr * SQRT_1_2).erf());
+      d1_arr = (1.0 + (-1.702 * d1_arr).exp()).inverse();
+      d2_arr = (1.0 + (-1.702 * d2_arr).exp()).inverse();
       double scalar_exp_z = std::exp(c_yy_sqrt * z); // Scalar exponent
 
       integral_arr += w * ((d1_arr * exp_part1_base) -
