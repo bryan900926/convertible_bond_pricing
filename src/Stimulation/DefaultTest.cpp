@@ -1,9 +1,8 @@
-#include <iostream>
 #include <random>
 #include "../HullWhiteModel/HullWhiteModel.h"
 #include "../Util/Util.h"
 
-void DefaultTest(const CbParas &cb_paras,
+double DefaultTest(const CbParas &cb_paras,
                  const CdgParas &cdg_paras,
                  const VasciekParas &vasciek_paras,
                  int num_stimulations) {
@@ -43,7 +42,7 @@ void DefaultTest(const CbParas &cb_paras,
             const double l_hat =
                 l_hat_first - r_now * (1 / cdg_paras.lamda + cdg_paras.phi);
             // y_now = y_now + (r_now - cdg_paras.delta - cdg_paras.sigma_v * cdg_paras.sigma_v / 2) * dt + cdg_paras.sigma_v * z_v * dt;
-            l_now = l_now + (l_hat - l_now) * dt * cdg_paras.lamda +
+            l_now = l_now + (l_hat - l_now) * dt * cdg_paras.lamda -
                     cdg_paras.sigma_v * std::sqrt(dt) * z_v;
             if (l_now > 0) {
               default_count++;
@@ -55,6 +54,8 @@ void DefaultTest(const CbParas &cb_paras,
         static_cast<double>(default_count) / num_stimulations;
     sum_of_default_probabilities += default_probability;
   }
-  std::cout << "Average Default Probability = "
-            << sum_of_default_probabilities / rep << std::endl;
+  std::cout << "Average Default Probability over " << rep
+            << " repetitions: " << sum_of_default_probabilities / rep
+            << std::endl;
+  return sum_of_default_probabilities / rep;
 }
