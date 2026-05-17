@@ -180,11 +180,11 @@ FinalResult CbTreeBuildV2(const CbParas &cb_paras, const CdgParas &cdg_paras,
                           const PzTreeResult &pz_result,
                           const std::vector<int> &num_node_steps);
 
- FinalResultMemoSave CbTreeBuildMemoSave(
-                         const CbParas &cb_paras,
-                         const CdgParas &cdg_paras,
-                         const VasciekParas &vasciek_paras,
-                         const HullWhiteTreeResult &tree_result,
-                         const CouponPaidInfo &coupon_info,
-                         const PzTreeResult &pz_result
+FinalResultMemoSave CbTreeBuildMemoSave(const CbParas &cb_paras,
+                                        const CdgParas &cdg_paras,
+                                        const VasciekParas &vasciek_paras,
+                                        const HullWhiteTreeResult &tree_result,
+                                        const CouponPaidInfo &coupon_info,
+                                        const PzTreeResult &pz_result,
+                                        const int m_idx_offset
 );

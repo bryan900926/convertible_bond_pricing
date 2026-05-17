@@ -2,18 +2,13 @@ cmake_minimum_required(VERSION 3.15)
 
 project(convertible_bond LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-include(FetchContent)
 
-FetchContent_Declare(
-  Eigen
-  GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
-  GIT_TAG        3.4.0  # Use a stable version tag
-)
-
-FetchContent_MakeAvailable(Eigen)
+find_package(Eigen3 3.4 REQUIRED)
+find_package(OpenMP REQUIRED)
 
 file(GLOB_RECURSE MY_SOURCES "src/*.cpp")
 
@@ -26,8 +21,10 @@ add_executable(convertible_bond
 target_include_directories(convertible_bond PRIVATE 
     ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
-target_include_directories(convertible_bond PRIVATE 
-    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/boost/boost_1_91_0
+
+target_link_libraries(convertible_bond PRIVATE 
+    Eigen3::Eigen
+    OpenMP::OpenMP_CXX
 )
 
 add_compile_options(
@@ -38,9 +35,6 @@ add_compile_options(
     -Wunused-parameter
 )
 
-if(Boost_FOUND)
-    include_directories(${Boost_INCLUDE_DIRS})
-endif()
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     target_compile_options(convertible_bond PRIVATE -fopenmp)
@@ -58,8 +52,11 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
 
 elseif(CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
     message(STATUS ">> REL_WITH_DEB_INFO: Max speed, but KEEP debug symbols <<")
-    target_compile_options(convertible_bond PRIVATE -O3 -march=native -g)
-    # Notice we DO NOT define NDEBUG here. We want Eigen to crash and tell us where it failed!
+    target_compile_options(convertible_bond PRIVATE 
+            -O3 
+            -march=native 
+            -g 
+        )
 
 elseif(CMAKE_BUILD_TYPE STREQUAL "Debug")
     message(STATUS ">> DEBUG MODE: Unoptimized, with debug symbols <<")

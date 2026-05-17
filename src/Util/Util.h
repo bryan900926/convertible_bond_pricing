@@ -1,6 +1,4 @@
-#include <concepts>
 #include "../Pricing/CbModel.h"
-#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <type_traits>
@@ -8,39 +6,46 @@
 
 // C++20 Concept: The function 'F' must take a double and return a double
 template <typename F>
-  requires std::invocable<F, double> &&
-           std::same_as<std::invoke_result_t<F, double>, double>
+requires std::is_invocable_v<F, double> && std::same_as<std::invoke_result_t<F, double>, double>
 double find_root_bisection(F objective, double left, double right,
                            double tol = 1e-3) {
     double obj_left = objective(left);
     double obj_right = objective(right);
-
-    // 1. Safety Check: Ensure the root is actually bracketed
+ 
     if (obj_left * obj_right > 0) {
-        std::cerr << "Error: Root is not bracketed in [" << left << ", " << right << "]\n";
         return std::nan(""); // Return Not-a-Number to indicate failure
     }
-    // Basic bisection implementation
+    
     double mid = 0.0;
     while ((right - left) / 2.0 > tol) {
-      mid = left + (right - left) / 2.0;
-      std::cout << "Left: " << left << ", Right: " << right << ", Mid: " << mid << "\n";
-      double obj_mid = objective(mid);
-      if (obj_mid == 0.0) return mid;
+        mid = left + (right - left) / 2.0;
+        double obj_mid = objective(mid); // Exactly ONE tree evaluation per iteration
+        
+        if (obj_mid == 0.0 || std::abs(obj_mid) < 1e-12) {
+            return mid;
+        }
 
-      if (objective(left) * obj_mid < 0) {
-          right = mid;
-      } else {
+        if (obj_left * obj_mid < 0) {
+            right = mid;
+        }
+        else {
             left = mid;
+            obj_left = obj_mid; // Update the boundary value without re-evaluating!
         }
     }
     return mid;
 }
 
+struct DefaultTestV1Result {
+    double average_default_probability;
+    double average_default_periods;
+};
+
+
 double DefaultTest(const CbParas &cb_paras, const CdgParas &cdg_paras,
                    const VasciekParas &vasciek_paras, int num_stimulations);
 
-double DefaultTestV1(const CbParas &cb_paras, const CdgParas &cdg_paras,
+DefaultTestV1Result DefaultTestV1(const CbParas &cb_paras, const CdgParas &cdg_paras,
                      const VasciekParas &vasciek_paras, int num_stimulations);
 
 namespace fs = std::filesystem;
@@ -66,7 +71,7 @@ inline void saveData(const std::vector<T>& data, const std::string& filename) {
 
     if (num_elements > 0) {
         ofs.write(reinterpret_cast<const char*>(data.data()), num_elements * sizeof(T));
-    }
+    } 
 }
 
 template <typename T>

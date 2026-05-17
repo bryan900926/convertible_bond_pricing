@@ -35,7 +35,7 @@ EquityContext EquityContextVec(const double dt, const Eigen::ArrayXXd &l_t_arr,
   const Eigen::ArrayXd a_mid_part =
       1 / (4 * vp.kappa * vp.kappa * vp.kappa) * vp.sigma_r * vp.sigma_r *
       (Eigen::exp(-vp.kappa * (dt + t_vec)) * -Eigen::exp(-vp.kappa * t_vec))
-          .pow(2) * (Eigen::exp(2 * vp.kappa * t_vec) - 1);
+          .pow(2) * (Eigen::exp(2 * vp.kappa     * t_vec) - 1);
   const Eigen::ArrayXd a_t_t_plus_dt =
       Eigen::exp(Eigen::log(p_0_t_plus_dt / p_0_t) + b_t_t_plus_dt * alpha_vec - a_mid_part);
                  
@@ -106,8 +106,10 @@ EquityContext EquityContextVec(const double dt, const Eigen::ArrayXXd &l_t_arr,
       - cdg_paras.sigma_v * cdg_paras.sigma_v *
             B_lambda_dt; // Uses B(ld), NOT B(ld+K)
 
-  if (c_yy < 0 || c_xx < 0)
-    throw std::runtime_error("Negative variance");
+  const double MIN_VARIANCE = 1e-12; // A safe threshold near zero
+  if (c_yy <= MIN_VARIANCE || c_xx <= MIN_VARIANCE) {
+    throw std::runtime_error("Variance is zero or negative (division by zero risk).");
+  }
 
   double corr_xy = c_xy / std::sqrt(c_xx * c_yy);
 

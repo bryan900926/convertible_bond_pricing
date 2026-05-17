@@ -1,11 +1,10 @@
 #include <Eigen/Dense>
 #include <cmath>
-#include <iostream>
 #include <vector>
 
 
-#include "..\Equity\EquityModel.h"
-#include "..\Util\Timer.h"
+#include "../Equity/EquityModel.h"
+#include "../Util/Timer.h"
 #include "CbModel.h"
 #include "Eigen/src/Core/Array.h"
 #include "Eigen/src/Core/util/Constants.h"

@@ -2,7 +2,8 @@
 #include "../HullWhiteModel/HullWhiteModel.h"
 #include "../Util/Util.h"
 
-double DefaultTestV1(const CbParas &cb_paras,
+
+DefaultTestV1Result DefaultTestV1(const CbParas &cb_paras,
                  const CdgParas &cdg_paras,
                  const VasciekParas &vasciek_paras,
                  int num_stimulations) {
@@ -123,11 +124,5 @@ double DefaultTestV1(const CbParas &cb_paras,
         static_cast<double>(default_count) / num_stimulations;
     sum_of_default_probabilities += default_probability;
   }
-  std::cout << "Average Default Probability over " << rep
-            << " repetitions: " << sum_of_default_probabilities / rep
-            << std::endl;
-  std::cout << "Average Default Periods: " 
-            << total_default_periods / rep
-            << std::endl;
-  return sum_of_default_probabilities / rep;
+  return {sum_of_default_probabilities / rep, total_default_periods / rep};
 }

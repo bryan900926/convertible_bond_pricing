@@ -3,16 +3,16 @@
 
 #include "..\Equity\EquityModel.h"
 #include "..\Util\Util.h"
-#include "CbModel.h"
+#include "CbModel.h" 
 #include "Eigen/src/Core/Array.h"
 
-FinalResultMemoSave CbTreeBuildMemoSave(
-                         const CbParas &cb_paras,
-                         const CdgParas &cdg_paras,
-                         const VasciekParas &vasciek_paras,
-                         const HullWhiteTreeResult &tree_result,
-                         const CouponPaidInfo &coupon_info,
-                         const PzTreeResult &pz_result
+FinalResultMemoSave CbTreeBuildMemoSave(const CbParas &cb_paras,
+                                        const CdgParas &cdg_paras,
+                                        const VasciekParas &vasciek_paras,
+                                        const HullWhiteTreeResult &tree_result,
+                                        const CouponPaidInfo &coupon_info,
+                                        const PzTreeResult &pz_result,
+                                        const int m_idx_offset
 )
 {
     const double sigma_x =
@@ -28,10 +28,6 @@ FinalResultMemoSave CbTreeBuildMemoSave(
     std::vector<PackedNode> final_data =
         loadData<PackedNode>("data_" + std::to_string(n + 1) + ".bin");
 
-    int m_idx_offset = 0;
-    for (const auto& node : final_data) {
-        m_idx_offset = std::max(m_idx_offset, std::abs(node.m));
-    }
     const int rows = (m_idx_offset + 1) * 2;
     const int cols = tree_result.short_rate_tree.rows() + 1;
     Eigen::ArrayXi map_now = Eigen::ArrayXi::Constant(rows * cols, -1);
@@ -80,7 +76,7 @@ FinalResultMemoSave CbTreeBuildMemoSave(
     Eigen::ArrayXd dm_vec(9);
     dm_vec << -2, 0, 2, -2, 0, 2, -2, 0, 2;
 
-    for (size_t i = n; i >= 1; --i)
+    for (int i = n; i >= 1; --i)
     {
         const double dt = (i == 1) ? coupon_info.dt_first : cb_paras.dt_other;
         const double jump = (i == 1) ? jump_first : jump_other;
@@ -229,6 +225,7 @@ FinalResultMemoSave CbTreeBuildMemoSave(
                 cb_now(k, p) = final_cb;
             }
         }
+        std::printf("Completed backward iteration %d\n", i);
         std::swap(cb_now, cb_next);
         std::swap(surv_now, surv_next);
         std::swap(map_now, map_next);

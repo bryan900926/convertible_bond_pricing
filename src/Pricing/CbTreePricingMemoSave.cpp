@@ -68,6 +68,7 @@ FinalResultMemoSave CbTreePricingMemoSave(const CbParas &cb_paras, const CdgPara
 
   const double miu_y_second =
       cdg_paras.delta + cdg_paras.sigma_v * cdg_paras.sigma_v / 2;
+  int m_idx_offset = 0;
   for (int i = 1; i <= n; ++i)
   {
     const double l_hat_first =
@@ -122,6 +123,7 @@ FinalResultMemoSave CbTreePricingMemoSave(const CbParas &cb_paras, const CdgPara
       for (int j = 0; j < 9; ++j)
       {
         const int m_next = nxt_m + dm_vec[j];
+        m_idx_offset = std::max(m_idx_offset, std::abs(m_next));
         const size_t k_next = pz_result.nxt_r_idx(k_now, j / 3);
         if (l_min_now > 0)
         {
@@ -157,6 +159,7 @@ FinalResultMemoSave CbTreePricingMemoSave(const CbParas &cb_paras, const CdgPara
         }
       }
     }
+    std::printf("Completed forward iteration %d, generated %zu nodes, m_idx_offset=%d\n", i, data_next.size(), m_idx_offset);
     saveData<PackedNode>(data_cur, "data_" + std::to_string(i) + ".bin");
     std::swap(data_cur, data_next);
     if (i < n) {
@@ -165,5 +168,5 @@ FinalResultMemoSave CbTreePricingMemoSave(const CbParas &cb_paras, const CdgPara
     data_next.clear();
   }
   saveData<PackedNode>(data_cur, "data_" + std::to_string(n + 1) + ".bin");
-  return CbTreeBuildMemoSave(cb_paras, cdg_paras, vasciek_paras, tree_result, coupon_info, pz_result);
+  return CbTreeBuildMemoSave(cb_paras, cdg_paras, vasciek_paras, tree_result, coupon_info, pz_result, m_idx_offset);
 }

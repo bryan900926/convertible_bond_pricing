@@ -81,9 +81,10 @@ Eigen::ArrayXXd EquityFunVec(const CbParas &cb_paras, const EquityContext &ctx,
     Eigen::ArrayXXd first_arr = (1.0 - term_B.exp()) * (term_A.exp().colwise() *
                                                         (v_t_arr * ctx.pt_arr));
 
+    const double safe_c_yy_sqrt = std::max(std::sqrt(ctx.c_yy), 1e-12);
     Eigen::ArrayXXd x_arr =
-        -ctx.n_arr / std::sqrt(ctx.c_yy) - std::sqrt(ctx.c_yy);
-    Eigen::ArrayXXd second_arr = 0.5 * (1.0 + (x_arr * SQRT_1_2).erf());
+        -ctx.n_arr / safe_c_yy_sqrt - safe_c_yy_sqrt;
+    Eigen::ArrayXXd second_arr = (1.0 + (-1.702 * x_arr).exp()).inverse();    
 
     return first_arr * second_arr;
   }
