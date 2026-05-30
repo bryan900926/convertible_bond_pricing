@@ -1,6 +1,7 @@
 // #define DEBUG
 #include "..\HullWhiteModel\HullWhiteModel.h"
 #include "..\Util\Util.h"
+#include "..\Util\TreeManager.hpp"
 #include "CbModel.h"
 
 #include <cmath>
@@ -69,6 +70,9 @@ FinalResultMemoSave CbTreePricingMemoSave(const CbParas &cb_paras, const CdgPara
   const double miu_y_second =
       cdg_paras.delta + cdg_paras.sigma_v * cdg_paras.sigma_v / 2;
   int m_idx_offset = 0;
+
+  TreeManager tree_manager("./temp_data/data1.bin", 10.0); // Set max size to 10 GB for testing
+
   for (int i = 1; i <= n; ++i)
   {
     const double l_hat_first =
@@ -159,14 +163,15 @@ FinalResultMemoSave CbTreePricingMemoSave(const CbParas &cb_paras, const CdgPara
         }
       }
     }
+    tree_manager.append_tree(data_cur);
     std::printf("Completed forward iteration %d, generated %zu nodes, m_idx_offset=%d\n", i, data_next.size(), m_idx_offset);
-    saveData<PackedNode>(data_cur, "data_" + std::to_string(i) + ".bin");
+    // saveData<PackedNode>(data_cur, "data_" + std::to_string(i) + ".bin");
     std::swap(data_cur, data_next);
     if (i < n) {
       look_up_map.clear();
     }
     data_next.clear();
   }
-  saveData<PackedNode>(data_cur, "data_" + std::to_string(n + 1) + ".bin");
-  return CbTreeBuildMemoSave(cb_paras, cdg_paras, vasciek_paras, tree_result, coupon_info, pz_result, m_idx_offset);
+  tree_manager.append_tree(data_cur);
+  return CbTreeBuildMemoSave(cb_paras, cdg_paras, vasciek_paras, tree_result, coupon_info, pz_result, m_idx_offset, tree_manager);
 }

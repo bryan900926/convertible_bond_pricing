@@ -3,18 +3,16 @@
 
 #include "..\Equity\EquityModel.h"
 #include "..\Util\Util.h"
+#include "..\Util\TreeManager.hpp"
 #include "CbModel.h" 
 #include "Eigen/src/Core/Array.h"
 
-FinalResultMemoSave CbTreeBuildMemoSave(const CbParas &cb_paras,
-                                        const CdgParas &cdg_paras,
-                                        const VasciekParas &vasciek_paras,
-                                        const HullWhiteTreeResult &tree_result,
-                                        const CouponPaidInfo &coupon_info,
-                                        const PzTreeResult &pz_result,
-                                        const int m_idx_offset
-)
-{
+FinalResultMemoSave CbTreeBuildMemoSave(
+    const CbParas &cb_paras, const CdgParas &cdg_paras,
+    const VasciekParas &vasciek_paras, const HullWhiteTreeResult &tree_result,
+    const CouponPaidInfo &coupon_info, const PzTreeResult &pz_result,
+    const int m_idx_offset, TreeManager &tree_manager) {
+    tree_manager.prepare_for_reading();
     const double sigma_x =
     cdg_paras.sigma_v * std::sqrt(1 - cb_paras.rho * cb_paras.rho);
     const double jump_first = sigma_x * std::sqrt(coupon_info.dt_first),
@@ -25,8 +23,7 @@ FinalResultMemoSave CbTreeBuildMemoSave(const CbParas &cb_paras,
     
     const auto& thetas = tree_result.alpha_result.thetas;
     const Eigen::ArrayX3i &nxt_r_idx = pz_result.nxt_r_idx;
-    std::vector<PackedNode> final_data =
-        loadData<PackedNode>("data_" + std::to_string(n + 1) + ".bin");
+    std::vector<PackedNode> final_data = tree_manager.get_period(n + 1);
 
     const int rows = (m_idx_offset + 1) * 2;
     const int cols = tree_result.short_rate_tree.rows() + 1;
@@ -95,7 +92,7 @@ FinalResultMemoSave CbTreeBuildMemoSave(const CbParas &cb_paras,
             cdg_paras.v +
             cdg_paras.phi * tree_result.alpha_result.thetas(i - 1);
 
-        std::vector<PackedNode> final_data = loadData<PackedNode>("data_" + std::to_string(i) + ".bin");
+        const std::vector<PackedNode>& final_data = tree_manager.get_period(i);
 
         Eigen::ArrayXXd cb_now(final_data.size(), cb_paras.partition);
         Eigen::ArrayXXd surv_now(final_data.size(), cb_paras.partition);
@@ -231,5 +228,6 @@ FinalResultMemoSave CbTreeBuildMemoSave(const CbParas &cb_paras,
         std::swap(map_now, map_next);
         std::swap(l_next, l_data_partition);
     }
+    tree_manager.close();
     return FinalResultMemoSave{cb_next(0, 0), 1 - surv_next(0, 0)};
 }
