@@ -11,16 +11,17 @@ double find_root_bisection(F objective, double left, double right,
                            double tol = 1e-3) {
     double obj_left = objective(left);
     double obj_right = objective(right);
- 
+    std::cout << "Initial: left=" << left << ", obj_left=" << obj_left
+              << "; right=" << right << ", obj_right=" << obj_right << "\n";
     if (obj_left * obj_right > 0) {
         return std::nan(""); // Return Not-a-Number to indicate failure
     }
-    
     double mid = 0.0;
     while ((right - left) / 2.0 > tol) {
         mid = left + (right - left) / 2.0;
-        double obj_mid = objective(mid); // Exactly ONE tree evaluation per iteration
-        
+        double obj_mid = objective(mid);
+        std::cout << "Bisection step: left=" << left << ", right=" << right
+                  << ", mid=" << mid << ", obj_mid=" << obj_mid << "\n";
         if (obj_mid == 0.0 || std::abs(obj_mid) < 1e-12) {
             return mid;
         }
@@ -92,4 +93,12 @@ inline std::vector<T> loadData(const std::string& filename) {
         ifs.read(reinterpret_cast<char*>(data.data()), num_elements * sizeof(T));
     }
     return data;
+}
+
+// Fast, FPU-safe exponential approximation for small values of x (near 0)
+inline double fast_safe_exp(double x)
+{
+    // Evaluates e^x using a 4th-order Taylor series: 1 + x + x^2/2 + x^3/6 + x^4/24
+    // We use Horner's method for maximum CPU speed and minimal variables.
+    return 1.0 + x * (1.0 + x * (0.5 + x * (0.16666666666666666 + x * 0.04166666666666666)));
 }

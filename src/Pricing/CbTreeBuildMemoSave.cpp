@@ -1,4 +1,5 @@
 #include <Eigen/Dense>
+#include <float.h>
 #include <vector>
 
 #include "..\Equity\EquityModel.h"
@@ -100,126 +101,136 @@ FinalResultMemoSave CbTreeBuildMemoSave(
         EquityTreeBuildResultMemoSave tree_build_result = EquityTreeBuildMemoSave(final_data, tree_result, cb_paras, cdg_paras, vasciek_paras, coupon_info);
         auto &l_data_partition = tree_build_result.l_data_partition;
         const auto &equity_tree = tree_build_result.equity_tree;
-
-        #pragma omp parallel for
-        for (int k = 0; k < final_data.size(); ++k)
+        #pragma omp parallel 
         {
-            const PackedNode &node = final_data[k];
-            const int m_now = node.m;
-            const int k_now = node.k;
-            const int next_m_middle = node.nxt_middle_m;
-
-            map_now((m_now + m_idx_offset) * cols + k_now) = k;
-
-            const double r_now = tree_result.short_rate_tree(k_now, i - 1);
-            const double x_now = x0 + m_now * jump;
-            const double y_now = y0 + (x_now - x0) +
-                                 cdg_paras.sigma_v * cb_paras.rho *
-                                     (r_now - vasciek_paras.r0) /
-                                     vasciek_paras.sigma_r;
-            const double miu_y = r_now - miu_y_second;
-            const double l_hat = l_hat_first - r_now * (1 / cdg_paras.lamda + cdg_paras.phi);
-            double df = std::exp(-r_now * dt);
-            const double p_u_hw = prob_hw(k_now, 0);
-            const double p_m_hw = prob_hw(k_now, 1);
-            const double p_d_hw = prob_hw(k_now, 2);
-            double nxt_p[9] = {
-                node.p_x_down * p_u_hw, node.p_x_mid * p_u_hw, node.p_x_up * p_u_hw, 
-                node.p_x_down * p_m_hw, node.p_x_mid * p_m_hw, node.p_x_up * p_m_hw, 
-                node.p_x_down * p_d_hw, node.p_x_mid * p_d_hw, node.p_x_up * p_d_hw  
-            };
-            for (size_t p = 0; p < cb_paras.partition; ++p)
+            _clearfp();
+            _controlfp(_MCW_EM, _MCW_EM);
+            #pragma omp for
+            for (int k = 0; k < final_data.size(); ++k)
             {
-                const double l_curr = l_data_partition(k, p);
-                const bool survival_flag = l_curr <= 0;
-                const double s_now = equity_tree(k, p);
-                const bool no_convert_flag =
-                    survival_flag && ((cb_paras.CR * s_now) < cb_paras.F);
-                double current_dil_s = 0.0;
-                if (no_convert_flag)
-                {
-                    current_dil_s = s_now;
-                }
-                else
-                {
-                    double val_conv = (s_now * cb_paras.NS + cb_paras.NC * cb_paras.F) /
-                                      (cb_paras.CR * cb_paras.NC + cb_paras.NS);
-                    current_dil_s = std::min(s_now, val_conv);
-                }
 
-                if (!survival_flag)
-                {
-                    cb_now(k, p) = cb_paras.F * cb_paras.rr;
-                    surv_now(k, p) = 0.0;
-                    continue;
-                }
-                double cb_expected = 0.0;
-                double surv_expected = 0.0;
-                for (int j = 0; j < 9; ++j)
-                {
-                    const int nxt_m = next_m_middle + dm_vec(j);
-                    const int nxt_k = nxt_r_idx(k_now, j / 3);
-                    const double r_next = tree_result.short_rate_tree(nxt_k, i - 1);
-                    const double y_next = y0 + (x0 + nxt_m * jump - x0) +
-                                          cdg_paras.sigma_v * cb_paras.rho *
-                                              (r_next - vasciek_paras.r0) /
-                                              vasciek_paras.sigma_r;
-                    const double sigma_y =
-                        y_next - (y_now + miu_y * dt); // h x 9
-                    const double l_curr_to_next =
-                        l_curr + (dt * cdg_paras.lamda * (l_hat - l_curr)) -
-                        sigma_y;
-                    double cb_val = 0.0;
-                    double surv_val = 0.0;
-                    if (l_curr_to_next > 0) {
-                        cb_val = cb_paras.F * cb_paras.rr;
-                    }
-                    else {
-                        const int l_idx =
-                          map_next((nxt_m + m_idx_offset) * cols + nxt_k);
-                        double* l_row_p = &l_next(l_idx, 0);
-                        double* next_end_p = l_row_p + cb_paras.partition;
-                        double* hi_p = std::upper_bound(l_row_p,
-                                                       next_end_p,
-                                                       l_curr_to_next);
-                        if (hi_p == next_end_p) {
-                            hi_p = next_end_p - 1;
-                        }
-                        double *lo_p = hi_p - 1;
-                        if (lo_p < &l_next(l_idx, 0)) {
-                          lo_p = &l_next(l_idx, 0);
-                        }
-                        const double l_low = *lo_p;
-                        const double l_high = *hi_p;
-                        if (lo_p == hi_p || l_high - l_low < 1e-8) {
-                          cb_val = cb_next(l_idx, lo_p - l_row_p);
-                          surv_val = surv_next(l_idx, lo_p - l_row_p);
-                        }
-                        else {
-                            double weight = std::max(0.0, std::min(1.0, (l_curr_to_next - l_low) / (l_high - l_low)));
-                            cb_val = cb_next(l_idx, lo_p - l_row_p) +
-                                     weight * (cb_next(l_idx, hi_p - l_row_p) -
-                                               cb_next(l_idx, lo_p - l_row_p));
-                            surv_val = surv_next(l_idx, lo_p - l_row_p) +
-                                       weight * (surv_next(l_idx, hi_p - l_row_p) -
-                                                 surv_next(l_idx, lo_p - l_row_p));
-                        }
-                    }
-                    const double prob = nxt_p[j];
-                    cb_expected += cb_val * prob;
-                    surv_expected += surv_val * prob;
-                }
-                cb_expected *= df;
-                cb_expected += cb_paras.coupon_rate * cb_paras.F * bool_flag;
-                double conversion_val = current_dil_s * cb_paras.CR;
-                double final_cb = cb_expected;
-                if (final_cb > call_price)
-                    final_cb = call_price;
+                const PackedNode &node = final_data[k];
+                const int m_now = node.m;
+                const int k_now = node.k;
+                const int next_m_middle = node.nxt_middle_m;
 
-                if (final_cb < conversion_val)
-                    final_cb = conversion_val;
-                surv_now(k, p) = surv_expected;
-                cb_now(k, p) = final_cb;
+                map_now((m_now + m_idx_offset) * cols + k_now) = k;
+
+                const double r_now = tree_result.short_rate_tree(k_now, i - 1);
+                const double x_now = x0 + m_now * jump;
+                const double y_now = y0 + (x_now - x0) +
+                                     cdg_paras.sigma_v * cb_paras.rho *
+                                         (r_now - vasciek_paras.r0) /
+                                         vasciek_paras.sigma_r;
+                const double miu_y = r_now - miu_y_second;
+                const double l_hat = l_hat_first - r_now * (1 / cdg_paras.lamda + cdg_paras.phi);
+                double df = fast_safe_exp(-r_now * dt);
+                const double p_u_hw = prob_hw(k_now, 0);
+                const double p_m_hw = prob_hw(k_now, 1);
+                const double p_d_hw = prob_hw(k_now, 2);
+                double nxt_p[9] = {
+                    node.p_x_down * p_u_hw, node.p_x_mid * p_u_hw, node.p_x_up * p_u_hw,
+                    node.p_x_down * p_m_hw, node.p_x_mid * p_m_hw, node.p_x_up * p_m_hw,
+                    node.p_x_down * p_d_hw, node.p_x_mid * p_d_hw, node.p_x_up * p_d_hw};
+                for (size_t p = 0; p < cb_paras.partition; ++p)
+                {
+                    const double l_curr = l_data_partition(k, p);
+                    const bool survival_flag = l_curr <= 0;
+                    const double s_now = equity_tree(k, p);
+                    const bool no_convert_flag =
+                        survival_flag && ((cb_paras.CR * s_now) < cb_paras.F);
+                    double current_dil_s = 0.0;
+                    if (no_convert_flag)
+                    {
+                        current_dil_s = s_now;
+                    }
+                    else
+                    {
+                        double val_conv = (s_now * cb_paras.NS + cb_paras.NC * cb_paras.F) /
+                                          (cb_paras.CR * cb_paras.NC + cb_paras.NS);
+                        current_dil_s = std::min(s_now, val_conv);
+                    }
+
+                    if (!survival_flag)
+                    {
+                        cb_now(k, p) = cb_paras.F * cb_paras.rr;
+                        surv_now(k, p) = 0.0;
+                        continue;
+                    }
+                    double cb_expected = 0.0;
+                    double surv_expected = 0.0;
+                    for (int j = 0; j < 9; ++j)
+                    {
+                        const int nxt_m = next_m_middle + dm_vec(j);
+                        const int nxt_k = nxt_r_idx(k_now, j / 3);
+                        const double r_next = tree_result.short_rate_tree(nxt_k, i - 1);
+                        const double y_next = y0 + (x0 + nxt_m * jump - x0) +
+                                              cdg_paras.sigma_v * cb_paras.rho *
+                                                  (r_next - vasciek_paras.r0) /
+                                                  vasciek_paras.sigma_r;
+                        const double sigma_y =
+                            y_next - (y_now + miu_y * dt); // h x 9
+                        const double l_curr_to_next =
+                            l_curr + (dt * cdg_paras.lamda * (l_hat - l_curr)) -
+                            sigma_y;
+                        double cb_val = 0.0;
+                        double surv_val = 0.0;
+                        if (l_curr_to_next > 0)
+                        {
+                            cb_val = cb_paras.F * cb_paras.rr;
+                        }
+                        else
+                        {
+                            const int l_idx =
+                                map_next((nxt_m + m_idx_offset) * cols + nxt_k);
+                            double *l_row_p = &l_next(l_idx, 0);
+                            double *next_end_p = l_row_p + cb_paras.partition;
+                            double *hi_p = std::upper_bound(l_row_p,
+                                                            next_end_p,
+                                                            l_curr_to_next);
+                            if (hi_p == next_end_p)
+                            {
+                                hi_p = next_end_p - 1;
+                            }
+                            double *lo_p = hi_p - 1;
+                            if (lo_p < &l_next(l_idx, 0))
+                            {
+                                lo_p = &l_next(l_idx, 0);
+                            }
+                            const double l_low = *lo_p;
+                            const double l_high = *hi_p;
+                            if (lo_p == hi_p || l_high - l_low < 1e-8)
+                            {
+                                cb_val = cb_next(l_idx, lo_p - l_row_p);
+                                surv_val = surv_next(l_idx, lo_p - l_row_p);
+                            }
+                            else
+                            {
+                                double weight = std::max(0.0, std::min(1.0, (l_curr_to_next - l_low) / (l_high - l_low)));
+                                cb_val = cb_next(l_idx, lo_p - l_row_p) +
+                                         weight * (cb_next(l_idx, hi_p - l_row_p) -
+                                                   cb_next(l_idx, lo_p - l_row_p));
+                                surv_val = surv_next(l_idx, lo_p - l_row_p) +
+                                           weight * (surv_next(l_idx, hi_p - l_row_p) -
+                                                     surv_next(l_idx, lo_p - l_row_p));
+                            }
+                        }
+                        const double prob = nxt_p[j];
+                        cb_expected += cb_val * prob;
+                        surv_expected += surv_val * prob;
+                    }
+                    cb_expected *= df;
+                    cb_expected += cb_paras.coupon_rate * cb_paras.F * bool_flag;
+                    double conversion_val = current_dil_s * cb_paras.CR;
+                    double final_cb = cb_expected;
+                    if (final_cb > call_price)
+                        final_cb = call_price;
+
+                    if (final_cb < conversion_val)
+                        final_cb = conversion_val;
+                    surv_now(k, p) = surv_expected;
+                    cb_now(k, p) = final_cb;
+                }
             }
         }
         std::printf("Completed backward iteration %d\n", i);
@@ -227,6 +238,7 @@ FinalResultMemoSave CbTreeBuildMemoSave(
         std::swap(surv_now, surv_next);
         std::swap(map_now, map_next);
         std::swap(l_next, l_data_partition);
+        map_now.setConstant(-1);
     }
     tree_manager.close();
     return FinalResultMemoSave{cb_next(0, 0), 1 - surv_next(0, 0)};

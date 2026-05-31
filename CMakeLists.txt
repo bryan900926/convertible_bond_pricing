@@ -16,6 +16,7 @@ add_executable(convertible_bond
     main.cpp
     ${MY_SOURCES}
     src/Equity/EquityTreeBuildMemoSave.cpp
+    src/Util/TreeManager.hpp
 )
 
 target_include_directories(convertible_bond PRIVATE 
@@ -47,19 +48,24 @@ endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
     message(STATUS ">> RELEASE MODE: Max speed, no safety checks <<")
-    target_compile_options(convertible_bond PRIVATE -O3 -march=native)
+    target_compile_options(convertible_bond PRIVATE -O3)
     target_compile_definitions(convertible_bond PRIVATE NDEBUG)
 
 elseif(CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
     message(STATUS ">> REL_WITH_DEB_INFO: Max speed, but KEEP debug symbols <<")
     target_compile_options(convertible_bond PRIVATE 
             -O3 
-            -march=native 
+            # -march=native 
+            # -fsanitize=address
+            -fstack-protector-all # Force the compiler to check for stack smashing 
             -g 
+            -fno-omit-frame-pointer
         )
+    # target_link_options(convertible_bond PRIVATE 
+    #                     -fsanitize=address 
+    # )
 
 elseif(CMAKE_BUILD_TYPE STREQUAL "Debug")
     message(STATUS ">> DEBUG MODE: Unoptimized, with debug symbols <<")
     target_compile_options(convertible_bond PRIVATE -O0 -g)
 endif()
-target_link_libraries(convertible_bond PRIVATE Eigen3::Eigen)

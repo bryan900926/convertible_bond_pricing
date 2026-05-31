@@ -14,7 +14,7 @@ Eigen::ArrayXXd EquityFunVec(const CbParas &cb_paras, const EquityContext &ctx,
   const double INV_SQRT_PI = 0.564189583547756286948;
 
   // --- CASE 1: Non-Zero Correlation ---
-  if (std::abs(ctx.corr_xy) > 1e-10)
+  if (std::abs(ctx.corr_xy) > 1e-5)
   {
     GaussHermiteResult gh_result = compute_gauss_hermite_rule(cb_paras.qdt);
 

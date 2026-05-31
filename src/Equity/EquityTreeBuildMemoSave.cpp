@@ -1,10 +1,10 @@
 #include "Eigen/Dense"
-#include <float.h>
 #include <cmath>
 #include <omp.h>
 #include <vector>
 
 #include "..\Pricing\CbModel.h"
+#include "..\Util\Util.h"
 #include "EquityModel.h"
 
 
@@ -20,7 +20,6 @@ EquityTreeBuildResultMemoSave EquityTreeBuildMemoSave(
         Eigen::ArrayXd::LinSpaced(cb_paras.partition, 1.0, 0.0);
     const Eigen::ArrayXd ratio_max_vec =
         Eigen::ArrayXd::LinSpaced(cb_paras.partition, 0.0, 1.0);
-
     const double x0 = std::log(cdg_paras.V0);
     const double y0 = std::log(cdg_paras.V0);
     const Eigen::ArrayXd &thetas = tree_result.alpha_result.thetas;
@@ -39,13 +38,6 @@ EquityTreeBuildResultMemoSave EquityTreeBuildMemoSave(
     Eigen::ArrayXd t_vec(num_nodes);
     Eigen::ArrayXd alpha_vec(num_nodes);
 
-    #ifdef _WIN32
-        unsigned int current_word;
-        // _EM_OVERFLOW: The specific bit for overflow
-        // _MCW_EM: The mask for all exception control bits
-        _controlfp_s(&current_word, _MCW_EM, _MCW_EM);
-    #endif
-
     for (int h = 0; h < data.size(); ++h)
     {
         const size_t t = (data[h].step > 2) ? data[h].step - 2 : 0;
@@ -60,31 +52,7 @@ EquityTreeBuildResultMemoSave EquityTreeBuildMemoSave(
         double exponent = y0 + (x_t - x0) +
                         cdg_paras.sigma_v * cb_paras.rho * (r_t - vasciek_paras.r0) /
                         vasciek_paras.sigma_r;
-
-        double v_t = 0.0;
-        // 1. Catch NaN and Infinity immediately
-        if (!std::isfinite(exponent)) {
-            v_t = 0.0; 
-        } 
-        else if (exponent <= 20.0 && exponent >= -20.0) {
-            v_t = std::exp(exponent);
-        } 
-        else if (exponent > 20.0) {
-            if (exponent > 700.0) {
-                v_t = std::numeric_limits<double>::max();
-            } else {
-                int parts = static_cast<int>(exponent / 15.0) + 1;
-                double safe_base = std::exp(exponent / parts);
-                
-                v_t = safe_base;
-                for (int i = 1; i < parts; ++i) {
-                    v_t *= safe_base; // Standard multiplication does not trigger the FPU trap
-                }
-            }
-        } 
-        else {
-            v_t = 0.0;
-        }
+        double v_t = fast_safe_exp(exponent);
         l_data_partition.row(h).segment(0, cb_paras.partition) = l_vec.transpose();
         r_data_partition(h) = r_t;
         theta_data_partition(h) = thetas(t);

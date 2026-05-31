@@ -5,7 +5,7 @@
 #include "PricingConfig.hpp"
 
 class PricingEngine {
-    const std::vector<double> dts = {1.0 / 12 };
+    const std::vector<double> dts = {1.0 / 52 };
     std::unordered_map<std::string, std::unordered_map<std::string, double>> market_data;
     std::unordered_map<std::string, double> dp_table = {
         {"EXPE", 0.035895},
@@ -16,23 +16,22 @@ class PricingEngine {
     std::unordered_map<std::string, double> cb_market_table = {
         {"LAB", 105.0},
         {"EEFT", 102.0},
-        {"DHR", 108.0},
+        {"DHR", 84},
         {"COLL", 111.5950},
         {"EXPE", 122.7410},
         {"SPOT", 84.2600},
         {"FSLY", 73.4100},
         {"VERI", 96.0}
     };
-    std::unordered_map<std::string, std::function<PricingConfig()>> factory_functions = {
-    {"LAB", ConfigFactory::get_LAB},
-    {"EEFT", ConfigFactory::get_EEFT},
-    {"DHR", ConfigFactory::get_DHR},
-    {"COLL", ConfigFactory::get_COLL},
-    {"EXPE", ConfigFactory::get_EXPE},
-    {"SPOT", ConfigFactory::get_SPOT},
-    {"FSLY", ConfigFactory::get_FSLY},
-    {"VERI", ConfigFactory::get_VERI}
-    };
+    std::unordered_map<std::string, std::function<PricingConfig()>>
+        factory_functions = {{"LAB", ConfigFactory::get_LAB},
+                             {"EEFT", ConfigFactory::get_EEFT},
+                             {"DHR", ConfigFactory::get_DHR},
+                             {"COLL", ConfigFactory::get_COLL},
+                             {"EXPE", ConfigFactory::get_EXPE},
+                             {"SPOT", ConfigFactory::get_SPOT},
+                             {"FSLY", ConfigFactory::get_FSLY},
+                             {"VERI", ConfigFactory::get_VERI}};
     // Load market data from CSV
     bool load_market_data(const std::string& filepath) {
         std::ifstream infile(filepath);
@@ -109,18 +108,20 @@ public:
         }
         return engine;
     }
-    void sensitivity_analysis(const std::string& ticker, CbParas cb, CdgParas cdg, VasciekParas vas) {
-        cb.sigma_V  = get_market_val(ticker, "sigma_V");
-        cdg.lamda   =  get_market_val(ticker, "lambda");
-        cdg.phi     = get_market_val(ticker, "phi");
-        cdg.V0      = get_market_val(ticker, "V0");
-        cdg.sigma_v = get_market_val(ticker, "sigma_V");
-        cb.rho = get_market_val(ticker, "rho");
-        cdg.v = get_market_val(ticker, "v");
-        cdg.l0 = std::log(get_market_val(ticker, "debt_ratio_0"));
+    void sensitivity_analysis(const std::string &ticker,
+                              const std::string &file_name, const double lo_nu, const double hi_nu) {
+        auto config = factory_functions[ticker]();
+        config.cb.sigma_V  = get_market_val(ticker, "sigma_V");
+        config.cdg.lamda   =  get_market_val(ticker, "lambda");
+        config.cdg.phi     = get_market_val(ticker, "phi");
+        config.cdg.V0      = get_market_val(ticker, "V0");
+        config.cdg.sigma_v = get_market_val(ticker, "sigma_V");
+        config.cb.rho = get_market_val(ticker, "rho");
+        config.cdg.v = get_market_val(ticker, "v");
+        config.cdg.l0 = std::log(get_market_val(ticker, "debt_ratio_0"));
 
         std::printf("[Info] %s - Injected Market Data: sigma_V=%.4f, lambda=%.4f, phi=%.4f, V0=%.4f, rho=%.4f, v=%.4f, l0=%.4f\n",
-                    ticker.c_str(), cb.sigma_V, cdg.lamda, cdg.phi, cdg.V0, cb.rho, cdg.v, cdg.l0);
+                    ticker.c_str(), config.cb.sigma_V, config.cdg.lamda, config.cdg.phi, config.cdg.V0, config.cb.rho, config.cdg.v, config.cdg.l0);
         // 2. Setup Output File
         std::string out_file = "./result/" + ticker + "_sensitivity.csv";
         std::filesystem::create_directories("./result/");
@@ -130,31 +131,35 @@ public:
             return;
         }
         data << "ticker,dt,cb_price,default_prob,dp(monte_carlo),dp(tree),default_periods,lambda,v\n";
-        std::vector<double> lambda_mul = {0.1, 0.05};
-        std::vector<double> v_mul = {0.1, 0.05};
+        std::vector<double> lambda_mul = {1, 0.1, 0.05};
+        std::vector<double> nus;
+
+        for (int i = 0; i < 5; ++i) {
+            nus.push_back(lo_nu + (hi_nu - lo_nu) * i / 4.0);
+        }
+
         // 3. Execute Pricing Loop
         std::cout << "Pricing " << ticker << "...\n";
+        config.cb.dt_other = 1 / 52.0;
         for (double x : lambda_mul) {
-        for (double y : v_mul) {
-            cdg.lamda = get_market_val(ticker, "lambda") * x;
-            cdg.v = get_market_val(ticker, "v") * y;
-            cb.dt_other = 1 / 12.0;
-            double dp1 = DefaultTest(cb, cdg, vas, 10000);
-            DefaultTestV1Result dp_result = DefaultTestV1(cb, cdg, vas, 10000);
-            try {
-                FinalResultMemoSave res = CbTreePricingMemoSave(cb, cdg, vas);
-                data << ticker << "," << cb.dt_other << "," << res.cb_price
-                     << ","
-                    << res.default_prob << ","
-                     << dp1 << ","
-                     << dp_result.average_default_probability << ","
-                     << dp_result.average_default_periods << ","
-                     << cdg.lamda << "," << cdg.v
-                     << "\n";
-            } catch (const std::exception& e) {
-                std::cerr << "  -> Error pricing " << ticker << " with dt=" << cb.dt_other << ": " << e.what() << "\n";
+            for (double nu : nus) {
+                config.cdg.lamda = get_market_val(ticker, "lambda") * x;
+                config.cdg.v = nu;
+                double dp1 = DefaultTest(config.cb, config.cdg, config.vas, 10000);
+                DefaultTestV1Result dp_result = DefaultTestV1(config.cb, config.cdg, config.vas, 10000);
+                try {
+                    FinalResultMemoSave res = CbTreePricingMemoSave(config.cb, config.cdg, config.vas, ticker);
+                    data << ticker << "," << config.cb.dt_other << "," << res.cb_price
+                        << "," << res.default_prob << ","
+                        << dp1 << ","
+                        << dp_result.average_default_probability << ","
+                        << dp_result.average_default_periods << ","
+                        << config.cdg.lamda << "," << config.cdg.v
+                        << "\n";
+                } catch (const std::exception& e) {
+                    std::cerr << "  -> Error pricing " << ticker << " with dt=" << config.cb.dt_other << ": " << e.what() << "\n";
+                }
             }
-        }
         }
         std::cout << "Finished " << ticker << ". Results saved to " << out_file << "\n";
     }
@@ -187,7 +192,7 @@ public:
             double dp1 = DefaultTest(cb, cdg, vas, 10000);
             DefaultTestV1Result dp_result = DefaultTestV1(cb, cdg, vas, 10000);
             try {
-                FinalResultMemoSave res = CbTreePricingMemoSave(cb, cdg, vas);
+                FinalResultMemoSave res = CbTreePricingMemoSave(cb, cdg, vas, ticker);
                 data << ticker
                     << "," << dt << "," << res.cb_price << "," 
                     << res.default_prob << ","
@@ -200,7 +205,7 @@ public:
         }
         std::cout << "Finished " << ticker << ". Results saved to " << out_file << "\n\n";
     }
-    void bisect_dp(const std::string &ticker) {
+    void bisect_nu_dp(const std::string &ticker, const std::string &file_name, const double target_dp) {
         auto config = factory_functions[ticker]();
         config.cb.sigma_V  = get_market_val(ticker, "sigma_V");
         config.cdg.lamda   =  get_market_val(ticker, "lambda");
@@ -210,34 +215,72 @@ public:
         config.cb.rho = get_market_val(ticker, "rho");
         config.cdg.v = get_market_val(ticker, "v");
         config.cdg.l0 = std::log(get_market_val(ticker, "debt_ratio_0"));
-        config.cb.dt_other = 1.0 / 52.0;
+        config.cb.dt_other = 1.0 / 26.0;
 
         std::printf("[Info] %s - Injected Market Data: sigma_V=%.4f, lambda=%.4f, phi=%.4f, V0=%.4f, rho=%.4f, v=%.4f, l0=%.4f\n",
                     ticker.c_str(), config.cb.sigma_V, config.cdg.lamda, config.cdg.phi, config.cdg.V0, config.cb.rho, config.cdg.v, config.cdg.l0);
         // 2. Setup Output File
-        std::string out_file = ticker + "_dp_results.csv";
         std::filesystem::create_directories("./result/");
-        std::ofstream data("./result/" + out_file);
+        std::ofstream data("./result/" + file_name);
         if (!data.is_open()) {
-            std::cerr << "Failed to open output file: " << out_file << "\n";
+            std::cerr << "Failed to open output file: " << file_name << "\n";
             return;
         }
         data << "ticker,cb_price,dp,nu,market_cb\n";
         std::cout << "Pricing " << ticker << "...\n";
         auto fn = [&](double nu) {
             config.cdg.v = nu;
-            FinalResultMemoSave res = CbTreePricingMemoSave(config.cb, config.cdg, config.vas);
-            double target_dp = dp_table[config.name];
-            return res.default_prob - target_dp;
+            std::cout << "  -> Testing nu=" << nu << "...\n";
+            return DefaultTestV1(config.cb, config.cdg, config.vas, 10000).average_default_probability - target_dp;
         };
-        double root_nu = find_root_bisection(fn, 0.0, 3.0);
+        double root_nu = find_root_bisection(fn, 0.0, 10.0, 1e-5);
         config.cdg.v = root_nu;
-        FinalResultMemoSave final_res = CbTreePricingMemoSave(config.cb, config.cdg, config.vas);
+        FinalResultMemoSave final_res = CbTreePricingMemoSave(config.cb, config.cdg, config.vas, ticker);
         data << ticker << "," << final_res.cb_price
-             << ","
-            << final_res.default_prob << ","
+            << ","
+            << DefaultTestV1(config.cb, config.cdg, config.vas, 10000).average_default_probability << ","
             << root_nu  << "," 
+            << (root_nu != std::nan("") ? cb_market_table[ticker] : -1) << "\n";
+        std::cout << "Finished " << ticker << ". Results saved to " << file_name
+                  << "\n";
+    }
+    void bisect_lambda_dp(const std::string &ticker, const std::string &file_name, const double target_dp) {
+        auto config = factory_functions[ticker]();
+        config.cb.sigma_V  = get_market_val(ticker, "sigma_V");
+        config.cdg.lamda   =  get_market_val(ticker, "lambda");
+        config.cdg.phi     = get_market_val(ticker, "phi");
+        config.cdg.V0      = get_market_val(ticker, "V0");
+        config.cdg.sigma_v = get_market_val(ticker, "sigma_V");
+        config.cb.rho = get_market_val(ticker, "rho");
+        config.cdg.v = get_market_val(ticker, "v");
+        config.cdg.l0 = std::log(get_market_val(ticker, "debt_ratio_0"));
+        config.cb.dt_other = 1.0 / 24.0;
+
+        std::printf("[Info] %s - Injected Market Data: sigma_V=%.4f, lambda=%.4f, phi=%.4f, V0=%.4f, rho=%.4f, v=%.4f, l0=%.4f\n",
+                    ticker.c_str(), config.cb.sigma_V, config.cdg.lamda, config.cdg.phi, config.cdg.V0, config.cb.rho, config.cdg.v, config.cdg.l0);
+        // 2. Setup Output File
+        std::filesystem::create_directories("./result/");
+        std::ofstream data("./result/" + file_name);
+        if (!data.is_open()) {
+            std::cerr << "Failed to open output file: " << file_name << "\n";
+            return;
+        }
+        data << "ticker,cb_price,dp,lambda,market_cb\n";
+        std::cout << "Pricing " << ticker << "...\n";
+        auto fn = [&](double lambda) {
+            config.cdg.lamda = lambda;
+            double prob = DefaultTestV1(config.cb, config.cdg, config.vas, 10000).average_default_probability;
+            std::cout << "  -> Testing lambda=" << lambda << "dp: " << prob << "...\n";
+            return prob - target_dp;
+        };
+        double root_lambda = find_root_bisection(fn, 0.001, 10.0);
+        config.cdg.lamda = root_lambda;
+        FinalResultMemoSave final_res = CbTreePricingMemoSave(config.cb, config.cdg, config.vas, ticker);
+        data << ticker << "," << final_res.cb_price
+            << ","
+            << DefaultTestV1(config.cb, config.cdg, config.vas, 10000).average_default_probability << ","
+            << root_lambda  << ","
             << cb_market_table[ticker] << "\n";
-        std::cout << "Finished " << ticker << ". Results saved to " << out_file << "\n\n";
+        std::cout << "Finished " << ticker << ". Results saved to " << file_name << "\n\n";
     }
 };

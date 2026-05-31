@@ -6,7 +6,7 @@
 DefaultTestV1Result DefaultTestV1(const CbParas &cb_paras,
                  const CdgParas &cdg_paras,
                  const VasciekParas &vasciek_paras,
-                 int num_stimulations) {
+                 const int num_stimulations) {
     const int rep = 20;
     CouponPaidInfo coupon_info =
         CouponPaidCalc(cb_paras.T, cb_paras.dt_other, cb_paras.paid_cycle);
@@ -35,6 +35,7 @@ DefaultTestV1Result DefaultTestV1(const CbParas &cb_paras,
         cdg_paras.delta + cdg_paras.sigma_v * cdg_paras.sigma_v / 2;
 
     double total_default_periods = 0.0;
+
     for (int rep_idx = 0; rep_idx < rep; ++rep_idx) {
         int default_count = 0;
         double sum_of_default_periods_iter = 0;
@@ -113,7 +114,7 @@ DefaultTestV1Result DefaultTestV1(const CbParas &cb_paras,
                 if (l_now > 0) {
                     default_count++;
                     sum_of_default_periods_iter += (coupon_info.dt_first + (t - 1) * cb_paras.dt_other);
-                break;
+                    break;
                 }
             }
         }
@@ -123,6 +124,6 @@ DefaultTestV1Result DefaultTestV1(const CbParas &cb_paras,
     double default_probability =
         static_cast<double>(default_count) / num_stimulations;
     sum_of_default_probabilities += default_probability;
-  }
+    }
   return {sum_of_default_probabilities / rep, total_default_periods / rep};
 }

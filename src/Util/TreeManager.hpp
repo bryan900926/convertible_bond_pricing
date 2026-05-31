@@ -45,14 +45,14 @@ public:
         _file_stream.open(_data_path, std::ios::binary | std::ios::out | std::ios::app);
     }
 
-    // --- FORWARD PASS (Writing) ---
+    void append_tree(const std::vector<PackedNode>&& tree_data) {
+        size_t node_count = tree_data.size();
 
-    void append_tree(const std::vector<PackedNode>& tree_data) {
-        _saved_tree.push_back(tree_data);
-        _node_cnts.push_back(tree_data.size());
-        _current_buffer_nodes += tree_data.size(); // Keep running total of nodes
+        _saved_tree.push_back(std::move(tree_data));
 
-        // FIX: Calculate memory based on node count, not period count
+        _node_cnts.push_back(node_count);
+        _current_buffer_nodes += node_count;
+
         double current_size_gb = (_current_buffer_nodes * sizeof(PackedNode)) / (1024.0 * 1024.0 * 1024.0);
 
         if (current_size_gb >= _max_size_gb) {
@@ -73,8 +73,6 @@ public:
             _current_buffer_nodes = 0;
         }
     }
-
-    // --- BACKWARD PASS (Reading) ---
 
     // Call this once before your backward `for` loop begins
     void prepare_for_reading() {
@@ -145,7 +143,6 @@ private:
         for (int i = start_i; i <= target_i; ++i) {
             size_t num_elements = 0;
             _in_stream.read(reinterpret_cast<char*>(&num_elements), sizeof(size_t));
-            
             _read_buffer[i - start_i].resize(num_elements);
             if (num_elements > 0) {
                 _in_stream.read(reinterpret_cast<char*>(_read_buffer[i - start_i].data()), 

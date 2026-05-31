@@ -8,10 +8,11 @@
 #include <cstddef>
 #include <cstdio>
 #include <limits>
+#include <thread>
 
 
 FinalResultMemoSave CbTreePricingMemoSave(const CbParas &cb_paras, const CdgParas &cdg_paras,
-                   const VasciekParas& vasciek_paras)
+                   const VasciekParas& vasciek_paras, const std::string& ticker)
 {
   CouponPaidInfo coupon_info =
       CouponPaidCalc(cb_paras.T, cb_paras.dt_other, cb_paras.paid_cycle);
@@ -71,7 +72,7 @@ FinalResultMemoSave CbTreePricingMemoSave(const CbParas &cb_paras, const CdgPara
       cdg_paras.delta + cdg_paras.sigma_v * cdg_paras.sigma_v / 2;
   int m_idx_offset = 0;
 
-  TreeManager tree_manager("./temp_data/data1.bin", 10.0); // Set max size to 10 GB for testing
+  TreeManager tree_manager("./temp_data/" + ticker + ".bin", 10.0); // Set max size to 10 GB for testing
 
   for (int i = 1; i <= n; ++i)
   {
@@ -163,15 +164,14 @@ FinalResultMemoSave CbTreePricingMemoSave(const CbParas &cb_paras, const CdgPara
         }
       }
     }
-    tree_manager.append_tree(data_cur);
+    tree_manager.append_tree(std::move(data_cur));
     std::printf("Completed forward iteration %d, generated %zu nodes, m_idx_offset=%d\n", i, data_next.size(), m_idx_offset);
-    // saveData<PackedNode>(data_cur, "data_" + std::to_string(i) + ".bin");
     std::swap(data_cur, data_next);
     if (i < n) {
       look_up_map.clear();
     }
     data_next.clear();
   }
-  tree_manager.append_tree(data_cur);
+  tree_manager.append_tree(std::move(data_cur));
   return CbTreeBuildMemoSave(cb_paras, cdg_paras, vasciek_paras, tree_result, coupon_info, pz_result, m_idx_offset, tree_manager);
 }

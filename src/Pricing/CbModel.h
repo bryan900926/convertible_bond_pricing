@@ -157,7 +157,7 @@ FinalResult CbTreePricing(const CbParas &cb_paras, const CdgParas &cdg_paras,
                    const VasciekParas vasciek_paras);
 
 FinalResultMemoSave CbTreePricingMemoSave(const CbParas &cb_paras, const CdgParas &cdg_paras,
-                   const VasciekParas& vasciek_paras);
+                   const VasciekParas& vasciek_paras, const std::string& ticker);
 
 Eigen::ArrayXi FindIndices(const Eigen::Array<bool, Eigen::Dynamic, 1> &mask);
 
@@ -180,11 +180,14 @@ FinalResult CbTreeBuildV2(const CbParas &cb_paras, const CdgParas &cdg_paras,
                           const PzTreeResult &pz_result,
                           const std::vector<int> &num_node_steps);
 
+class TreeManager;
+
 FinalResultMemoSave CbTreeBuildMemoSave(const CbParas &cb_paras,
                                         const CdgParas &cdg_paras,
                                         const VasciekParas &vasciek_paras,
                                         const HullWhiteTreeResult &tree_result,
                                         const CouponPaidInfo &coupon_info,
                                         const PzTreeResult &pz_result,
-                                        const int m_idx_offset
+                                        const int m_idx_offset,
+                                        TreeManager &tree_manager
 );
