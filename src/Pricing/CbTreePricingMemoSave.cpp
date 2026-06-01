@@ -54,9 +54,6 @@ FinalResultMemoSave CbTreePricingMemoSave(const CbParas &cb_paras, const CdgPara
 
   const std::array<int, 9> dm_vec = {-2, 0, 2, -2, 0, 2, -2, 0, 2};
 
-  std::unordered_map<long long, size_t> look_up_map;
-
-
   const double NaN = std::numeric_limits<double>::quiet_NaN();
 
   const Eigen::ArrayXd range_vec =
@@ -73,6 +70,41 @@ FinalResultMemoSave CbTreePricingMemoSave(const CbParas &cb_paras, const CdgPara
   int m_idx_offset = 0;
 
   TreeManager tree_manager("./temp_data/" + ticker + ".bin", 10.0); // Set max size to 10 GB for testing
+
+  const int max_k = tree_result.short_rate_tree.rows();
+
+  // 1. Calculate the Global Maximum Bound for m
+  int global_max_m = 0;
+  int current_max_m = 0;
+  for (int i = 1; i <= n; ++i)
+  {
+    double dt = (i == 1) ? coupon_info.dt_first : cb_paras.dt_other;
+    double jump = (i == 1) ? jump_first : jump_other;
+    double r_min = tree_result.short_rate_tree.col(i - 1).minCoeff();
+    double r_max = tree_result.short_rate_tree.col(i - 1).maxCoeff();
+
+    auto calc_nxt_m = [&](double r_val, int m_val)
+    {
+      double miu_y = r_val - miu_y_second;
+      double miu_x = miu_y - cb_paras.sigma_V * cb_paras.rho *
+                                 (vasciek_paras.kappa * (thetas(i - 1) - r_val)) /
+                                 vasciek_paras.sigma_r;
+      double x_val = x0 + m_val * jump;
+      return static_cast<int>(std::round(((x_val + miu_x * dt) - x0) / jump));
+    };
+
+    current_max_m = std::max(
+        std::abs(calc_nxt_m(r_max, current_max_m) + 2),
+        std::abs(calc_nxt_m(r_min, -current_max_m) - 2));
+    global_max_m = std::max(global_max_m, current_max_m);
+  }
+
+  // Add a small safety buffer just in case of floating-point rounding quirks
+  global_max_m += 5;
+
+  // 2. Allocate the Global Lookup Matrix ONCE (Flattened 2D: [m][k])
+  // Size is (2 * max_m + 1) rows by (max_k) columns.
+  std::vector<int> lookup_matrix((global_max_m * 2 + 1) * max_k, -1);
 
   for (int i = 1; i <= n; ++i)
   {
@@ -149,27 +181,29 @@ FinalResultMemoSave CbTreePricingMemoSave(const CbParas &cb_paras, const CdgPara
         const double l_next_min = scratch_next.minCoeff();
         const double l_next_max = scratch_next.maxCoeff();
 
-        const long long hash_val = (static_cast<long long>(m_next) << 32) | k_next;
-        const auto search = look_up_map.find(hash_val);
-        if (search == look_up_map.end()) {
+        const int map_idx = (m_next + global_max_m) * max_k + k_next;
+        int existing_idx = lookup_matrix[map_idx];
+        if (existing_idx == -1) {
           PackedNode new_node = {i + 1, k_next, m_next, l_next_min, l_next_max, 0, 0, 0, 0};
           data_next.emplace_back(new_node);
-          look_up_map[hash_val] = data_next.size() - 1;
+          lookup_matrix[map_idx] = data_next.size() - 1;
         }
         else
         {
-          PackedNode &exist_node = data_next[search->second];
+          PackedNode &exist_node = data_next[existing_idx];
           exist_node.l_min = std::min(exist_node.l_min, l_next_min);
           exist_node.l_max = std::max(exist_node.l_max, l_next_max);
         }
       }
     }
+    for (const auto &next_node : data_next)
+    {
+      const int reset_idx = (next_node.m + global_max_m) * max_k + next_node.k;
+      lookup_matrix[reset_idx] = -1;
+    }
     tree_manager.append_tree(std::move(data_cur));
     std::printf("Completed forward iteration %d, generated %zu nodes, m_idx_offset=%d\n", i, data_next.size(), m_idx_offset);
     std::swap(data_cur, data_next);
-    if (i < n) {
-      look_up_map.clear();
-    }
     data_next.clear();
   }
   tree_manager.append_tree(std::move(data_cur));
