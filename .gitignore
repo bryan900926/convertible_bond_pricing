@@ -7,6 +7,8 @@ Build/
 cmake-build-debug/
 cmake-build-release/
 out/
+result/
+Visualize/
 
 # --- CMake Generated Files (if you build in-source) ---
 CMakeCache.txt
@@ -54,4 +56,5 @@ Thumbs.db
 
 **/third_party
 **/temp_data
+
 

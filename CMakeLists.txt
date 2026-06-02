@@ -6,27 +6,42 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# 1. FetchContent MUST be included before you declare it
+include(FetchContent)
+FetchContent_Declare(
+  eigen
+  GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
+  GIT_TAG        3.4.0
+)
+FetchContent_MakeAvailable(eigen)
 
-find_package(Eigen3 3.4 REQUIRED)
+# 2. Find OpenMP
 find_package(OpenMP REQUIRED)
 
 file(GLOB_RECURSE MY_SOURCES "src/*.cpp")
+file(GLOB_RECURSE MY_HEADERS "src/*.hpp")
+
 
 add_executable(convertible_bond
     main.cpp
     ${MY_SOURCES}
-    src/Equity/EquityTreeBuildMemoSave.cpp
-    src/Util/TreeManager.hpp
 )
 
 target_include_directories(convertible_bond PRIVATE 
     ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
+# 3. Link Eigen (Wait to link OpenMP below)
 target_link_libraries(convertible_bond PRIVATE 
     Eigen3::Eigen
-    OpenMP::OpenMP_CXX
 )
+
+# 4. The Bulletproof OpenMP Fix: 
+# Instead of relying on the buggy OpenMP::OpenMP_CXX magic target, 
+# we inject the raw compiler flags directly. This works on every compiler.
+target_compile_options(convertible_bond PRIVATE ${OpenMP_CXX_FLAGS})
+target_link_options(convertible_bond PRIVATE ${OpenMP_CXX_FLAGS})
+
 
 add_compile_options(
     -Wall
@@ -35,16 +50,6 @@ add_compile_options(
     -Wunused-variable
     -Wunused-parameter
 )
-
-
-if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    target_compile_options(convertible_bond PRIVATE -fopenmp)
-    target_link_options(convertible_bond PRIVATE -fopenmp)
-elseif(MSVC)
-    target_compile_options(convertible_bond PRIVATE /openmp)
-else()
-    target_link_libraries(convertible_bond PRIVATE OpenMP::OpenMP_CXX)
-endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
     message(STATUS ">> RELEASE MODE: Max speed, no safety checks <<")
@@ -61,9 +66,6 @@ elseif(CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
             -g 
             -fno-omit-frame-pointer
         )
-    # target_link_options(convertible_bond PRIVATE 
-    #                     -fsanitize=address 
-    # )
 
 elseif(CMAKE_BUILD_TYPE STREQUAL "Debug")
     message(STATUS ">> DEBUG MODE: Unoptimized, with debug symbols <<")
