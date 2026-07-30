@@ -4,7 +4,8 @@
 #include "EquityModel.h"
 #include <algorithm>
 
-EquityContext EquityContextVec(const double dt, const Eigen::ArrayXXd &l_t_arr,
+EquityContext EquityContextVec(const double dt, 
+                               const Eigen::ArrayXXd &l_t_arr,
                                const Eigen::ArrayXd &r_t_arr,
                                const Eigen::ArrayXd &theta_t_arr,
                                const Eigen::ArrayXd &theta_t1_arr,
@@ -28,53 +29,6 @@ EquityContext EquityContextVec(const double dt, const Eigen::ArrayXXd &l_t_arr,
           cdg_paras.lamda -
       cdg_paras.v;
   const double b = -1.0 / cdg_paras.lamda - cdg_paras.phi;
-
-  const double b_t_t_plus_dt = (1 - exp(-vp.kappa * dt)) / vp.kappa;
-  const Eigen::ArrayXd p_0_t_plus_dt = Eigen::exp(-(dt + t_vec) * r_t_arr);
-  const Eigen::ArrayXd p_0_t = Eigen::exp(-t_vec * r_t_arr);
-  const Eigen::ArrayXd a_mid_part =
-      1 / (4 * vp.kappa * vp.kappa * vp.kappa) * vp.sigma_r * vp.sigma_r *
-      (Eigen::exp(-vp.kappa * (dt + t_vec)) * -Eigen::exp(-vp.kappa * t_vec))
-          .pow(2) * (Eigen::exp(2 * vp.kappa     * t_vec) - 1);
-  const Eigen::ArrayXd a_t_t_plus_dt =
-      Eigen::exp(Eigen::log(p_0_t_plus_dt / p_0_t) + b_t_t_plus_dt * alpha_vec - a_mid_part);
-                 
-  const Eigen::ArrayXd bond_log_arr = a_t_t_plus_dt * Eigen::exp(-b_t_t_plus_dt * r_t_arr);
-
-  const Eigen::ArrayXd m_t_arr =
-      (vp.sigma_r * vp.sigma_r / (2.0 * vp.kappa * vp.kappa)) *
-          (dt - 2.0 * B_kappa_dt + B_2kappa_dt) -
-      bond_log_arr;
-
-  const Eigen::ArrayXXd h_t_arr =
-      (l_t_arr * std::exp(-cdg_paras.lamda * dt)).colwise() +
-      ((cdg_paras.lamda * cdg_paras.phi / vp.kappa) *
-           ((theta_t1_arr + std::exp(-cdg_paras.lamda * dt) * theta_t_arr) /
-            2.0) *
-           dt +
-       a * (1.0 - std::exp(-cdg_paras.lamda * dt)) +
-       cdg_paras.lamda * b *
-           (std::exp(-cdg_paras.lamda * dt) * B_lambda_minus_kappa_dt *
-                r_t_arr +
-            std::exp(-vp.kappa * dt) * B_lambda_minus_kappa_dt * theta_t_arr *
-                dt / 2.0));
-
-  const Eigen::ArrayXXd m_arr =
-      (m_t_arr - cdg_paras.delta * dt -
-       cb_paras.sigma_V * cdg_paras.sigma_v / 2.0 * dt -
-       vp.sigma_r * vp.sigma_r / (vp.kappa * vp.kappa) *
-           (dt - 2 * B_kappa_dt + B_2kappa_dt) -
-       cb_paras.sigma_V * vp.sigma_r * cb_paras.rho / vp.kappa *
-           (dt - B_kappa_dt))
-          .replicate(1, l_t_arr.cols());
-
-  const Eigen::ArrayXXd n_arr =
-      h_t_arr -
-      (cdg_paras.lamda * b * vp.sigma_r * vp.sigma_r) /
-          (vp.kappa * (cdg_paras.lamda - vp.kappa)) *
-          (B_kappa_dt - B_lambda_dt - B_2kappa_dt + B_lambda_plus_kappa_dt) +
-      cdg_paras.sigma_v * vp.sigma_r * cb_paras.rho / vp.kappa *
-          (B_lambda_dt - B_lambda_plus_kappa_dt);
 
   const double c_xx = ((vp.sigma_r * vp.sigma_r) / (vp.kappa * vp.kappa)) *
                           (dt - 2.0 * B_kappa_dt + B_2kappa_dt) +
@@ -105,6 +59,53 @@ EquityContext EquityContextVec(const double dt, const Eigen::ArrayXXd &l_t_arr,
             (B_kappa_dt - B_lambda_dt) // Uses B(ld), NOT B(ld-K)
       - cdg_paras.sigma_v * cdg_paras.sigma_v *
             B_lambda_dt; // Uses B(ld), NOT B(ld+K)
+  const double b_t_t_plus_dt = (1 - exp(-vp.kappa * dt)) / vp.kappa;
+  
+  const Eigen::ArrayXd p_0_t_plus_dt = Eigen::exp(-(dt + t_vec) * r_t_arr);
+  const Eigen::ArrayXd p_0_t = Eigen::exp(-t_vec * r_t_arr);
+  const Eigen::ArrayXd a_mid_part =
+      1 / (4 * vp.kappa * vp.kappa * vp.kappa) * vp.sigma_r * vp.sigma_r *
+      (Eigen::exp(-vp.kappa * (dt + t_vec)) * -Eigen::exp(-vp.kappa * t_vec))
+          .pow(2) * (Eigen::exp(2 * vp.kappa * t_vec) - 1);
+  const Eigen::ArrayXd a_t_t_plus_dt =
+      Eigen::exp(Eigen::log(p_0_t_plus_dt / p_0_t) + b_t_t_plus_dt * alpha_vec - a_mid_part);
+                 
+  const Eigen::ArrayXd bond_log_arr = a_t_t_plus_dt * Eigen::exp(-b_t_t_plus_dt * r_t_arr);
+
+  const Eigen::ArrayXd m_t_arr =
+      (vp.sigma_r * vp.sigma_r / (2.0 * vp.kappa * vp.kappa)) *
+          (dt - 2.0 * B_kappa_dt + B_2kappa_dt) -
+      bond_log_arr;
+
+  const Eigen::ArrayXXd h_t_arr =
+      (l_t_arr * std::exp(-cdg_paras.lamda * dt)).colwise() +
+      ((cdg_paras.lamda * cdg_paras.phi / vp.kappa) *
+           ((theta_t1_arr + std::exp(-cdg_paras.lamda * dt) * theta_t_arr) /
+            2.0) *
+           dt +
+    a * (1.0 - std::exp(-cdg_paras.lamda * dt)) +
+       cdg_paras.lamda * b *
+           (std::exp(-cdg_paras.lamda * dt) * B_lambda_minus_kappa_dt *
+                r_t_arr +
+            std::exp(-vp.kappa * dt) * B_lambda_minus_kappa_dt * theta_t_arr *
+                dt / 2.0));
+
+  const Eigen::ArrayXXd m_arr =
+      (m_t_arr - cdg_paras.delta * dt -
+       cdg_paras.sigma_v * cdg_paras.sigma_v / 2.0 * dt -
+       vp.sigma_r * vp.sigma_r / (vp.kappa * vp.kappa) *
+           (dt - 2 * B_kappa_dt + B_2kappa_dt) -
+       cdg_paras.sigma_v * vp.sigma_r * cb_paras.rho / vp.kappa *
+           (dt - B_kappa_dt))
+          .replicate(1, l_t_arr.cols());
+
+  const Eigen::ArrayXXd n_arr =
+      h_t_arr -
+      (cdg_paras.lamda * b * vp.sigma_r * vp.sigma_r) /
+          (vp.kappa * (cdg_paras.lamda - vp.kappa)) *
+          (B_kappa_dt - B_lambda_dt - B_2kappa_dt + B_lambda_plus_kappa_dt) +
+      cdg_paras.sigma_v * vp.sigma_r * cb_paras.rho / vp.kappa *
+          (B_lambda_dt - B_lambda_plus_kappa_dt);
 
   const double MIN_VARIANCE = 1e-12; // A safe threshold near zero
   if (c_yy <= MIN_VARIANCE || c_xx <= MIN_VARIANCE) {

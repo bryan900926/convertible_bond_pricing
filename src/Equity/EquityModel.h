@@ -75,11 +75,12 @@ EquityTreeBuildResult EquityTreeBuild(const std::vector<LNode> &l_data,
                                       const VasciekParas &vasciek_paras,
                                       const CouponPaidInfo &coupon_info
                                       );
-
-EquityTreeBuildResultMemoSave EquityTreeBuildMemoSave(
+class EquityManager;
+void EquityTreeBuildMemoSave(
                                       const std::vector<PackedNode> &data,
                                       const HullWhiteTreeResult &tree_result,
                                       const CbParas &cb_paras,
                                       const CdgParas &cdg_paras,
                                       const VasciekParas &vasciek_paras,
-                                      const CouponPaidInfo &coupon_info);
+                                      const CouponPaidInfo &coupon_info,
+                                      EquityManager &equity_manager);
