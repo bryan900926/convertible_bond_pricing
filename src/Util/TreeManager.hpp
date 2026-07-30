@@ -7,12 +7,16 @@
 #include <filesystem>
 #include <stdexcept>
 
+/// @brief TreeManager is a utility class designed to manage the storage and retrieval of large tree structures at each period t,
+/// specifically PackedNode trees, to and from disk. It allows for efficient memory management by buffering tree data
+/// in RAM and writing it to disk when a specified size limit is reached. This is particularly useful for scenarios
+/// where the tree structure is too large to fit entirely in memory.
 class TreeManager {
     std::string _data_path;
     float _max_size_gb;
     std::vector<std::vector<PackedNode>> _saved_tree;
     std::vector<int> _node_cnts; 
-    size_t _current_buffer_nodes = 0; // FIX: Tracks actual node count in RAM
+    size_t _current_buffer_nodes = 0;
     std::ofstream _file_stream;
 
     // --- Reading Variables ---

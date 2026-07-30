@@ -5,7 +5,12 @@
 #include "CbModel.h"
 
 constexpr double EPSILON = 1e-9;
-
+/// @brief Calculate the coupon payment schedule for a convertible bond. Since at most of starting point,
+/// it might be in the middle of the coupon payment period, we need to calculate the first step separately.
+/// @param T Total time to maturity
+/// @param dt time step in after the first step, the first step is different from the rest of the steps, so we need to calculate the first step separately
+/// @param paid_cycle The period of coupon payments
+/// @return A CouponPaidInfo structure containing the coupon payment schedule
 CouponPaidInfo CouponPaidCalc(
     const double T,
     const double dt,

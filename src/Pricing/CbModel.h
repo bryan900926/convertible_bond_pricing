@@ -4,7 +4,6 @@
 #include <vector>
 
 #include "..\HullWhiteModel\HullWhiteModel.h"
-#include "Eigen/src/Core/Array.h"
 
 class CallInfo {
 public:
@@ -18,7 +17,7 @@ public:
 class CallSchedule {
     std::vector<CallInfo> _call_infos;
     int _current_index = 0;
-    const std::string _pricing_date;
+    std::string _pricing_date;
     // Helper to convert "YYYY-MM-DD" strings into exact day differences
     static double CalculateDaysBetween(const std::string& pricing_date, const std::string& target_date) {
         auto parse_date = [](const std::string& date_str) {
@@ -37,12 +36,15 @@ class CallSchedule {
     }
 public:
     static CallSchedule Create(const std::vector<CallInfo>& calls, const std::string& pricing_date) {
-        std::vector<CallInfo> mutable_calls = calls;
+        std::vector<CallInfo> mutable_calls;
         
         for (auto& call : mutable_calls) {
-            call.digit_date = CalculateDaysBetween(pricing_date, call.date_str);
+          call.digit_date = CalculateDaysBetween(pricing_date, call.date_str);
+          // filter out calls that are after the pricing date
+          if (call.digit_date >= 0) {
+              mutable_calls.push_back(call);
+          }
         }
-
         std::sort(mutable_calls.begin(), mutable_calls.end(), 
             [](const CallInfo& a, const CallInfo& b) {
                 return a.digit_date < b.digit_date;
@@ -50,7 +52,9 @@ public:
 
         return CallSchedule(std::move(mutable_calls), pricing_date); 
     }
-
+    /// @brief This method assume company can call multiple times, and return the latest call price if the current time is after the call date
+    /// @param current_time_in_days 
+    /// @return 
     double GetActiveCallPrice(double current_time_in_days) const {
         
         double active_price = std::numeric_limits<double>::max();
@@ -62,6 +66,9 @@ public:
         }
         return active_price;
     }
+    /// @brief This method assume investor can only call once
+    /// @param current_time_in_days 
+    /// @return 
     double GetActiveCallOneTime(double current_time_in_days) {
         if (_current_index < _call_infos.size() && current_time_in_days >= _call_infos[_current_index].digit_date) {
             return _call_infos[_current_index++].call_price;
@@ -71,11 +78,10 @@ public:
 };
 struct CbParas {
   double T;
-  double sigma_V;
   double F;
   double rr;
   double CR;
-  int NS;
+  double NS;
   int NC;
   int CP;
   double qdt;
@@ -85,6 +91,7 @@ struct CbParas {
   double coupon_rate;
   double dt_other;
   double paid_cycle;
+  double s0;
   mutable CallSchedule call_schedule;
 };
 
@@ -148,6 +155,8 @@ struct FinalResult {
 struct FinalResultMemoSave {
   double cb_price;
   double default_prob;
+  double zcb_price;
+  bool convert_at_t0;
 };
 
 CouponPaidInfo CouponPaidCalc(const double T, const double dt,
@@ -159,18 +168,7 @@ FinalResult CbTreePricing(const CbParas &cb_paras, const CdgParas &cdg_paras,
 FinalResultMemoSave CbTreePricingMemoSave(const CbParas &cb_paras, const CdgParas &cdg_paras,
                    const VasciekParas& vasciek_paras, const std::string& ticker);
 
-Eigen::ArrayXi FindIndices(const Eigen::Array<bool, Eigen::Dynamic, 1> &mask);
-
 struct EquityTreeBuildResult;
-
-void FillMap(Eigen::ArrayXi &map, const int step,
-             const Eigen::ArrayX3i &idx_vec,
-             const std::vector<int> &cum_node_steps,
-             const std::vector<int> &num_node_steps, const int m_idx_offset,
-             const int cols);
-
-Eigen::ArrayXd DoInterp(const Eigen::ArrayXd &val1, const Eigen::ArrayXd &val2,
-                        const Eigen::ArrayXd &weight);
 
 FinalResult CbTreeBuildV2(const CbParas &cb_paras, const CdgParas &cdg_paras,
                           const VasciekParas &vasciek_paras,

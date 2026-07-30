@@ -8,15 +8,20 @@
 #include <cstddef>
 #include <cstdio>
 #include <limits>
-#include <thread>
 
-
+/// @brief CbTreePricingMemoSave
+/// This function contruct the leverage tree, later this tree would be
+/// used to calculate the price of the convertible bond backward induction.
+/// @param cb_paras parameters for convertible bond
+/// @param cdg_paras parameters for CDG model (2001, Do Credit Spreads Reflect Stationary Leverage Ratios (Collin-Dufresne and Goldstein))
+/// @param vasciek_paras parameters for Vasciek model
+/// @param ticker the ticker of the convertible bond, used to save the leverage tree to a file
+/// @return
 FinalResultMemoSave CbTreePricingMemoSave(const CbParas &cb_paras, const CdgParas &cdg_paras,
                    const VasciekParas& vasciek_paras, const std::string& ticker)
 {
   CouponPaidInfo coupon_info =
       CouponPaidCalc(cb_paras.T, cb_paras.dt_other, cb_paras.paid_cycle);
-
   int n = coupon_info.total_steps;
 
   double t_end = coupon_info.dt_first + n * cb_paras.dt_other;
@@ -50,8 +55,12 @@ FinalResultMemoSave CbTreePricingMemoSave(const CbParas &cb_paras, const CdgPara
   std::vector<PackedNode> data_next;
 
   data_cur.emplace_back(PackedNode{1, static_cast<size_t>(pz_result.start_h), 0, cdg_paras.l0,
-                            cdg_paras.l0, 0, 0, 0, 0});
+                            cdg_paras.l0, 0, 0, 0, 0}); // our starting point
 
+  // this is the transition of m, for each node, we have 9 possible next nodes,
+  // the m transition is -2, 0, 2 for each of the 3 possible x_tree transition (down, mid, up)
+  // the reason why the gap is 2 is detailed at (Efficient option pricing on stocks paying discrete or
+  // path - dependent dividends with the stair tree)
   const std::array<int, 9> dm_vec = {-2, 0, 2, -2, 0, 2, -2, 0, 2};
 
   const double NaN = std::numeric_limits<double>::quiet_NaN();
@@ -69,6 +78,7 @@ FinalResultMemoSave CbTreePricingMemoSave(const CbParas &cb_paras, const CdgPara
       cdg_paras.delta + cdg_paras.sigma_v * cdg_paras.sigma_v / 2;
   int m_idx_offset = 0;
 
+  // We encountered the memory issue when the tree size is too large, so we need to save the tree to a file and read it back when needed.
   TreeManager tree_manager("./temp_data/" + ticker + ".bin", 10.0); // Set max size to 10 GB for testing
 
   const int max_k = tree_result.short_rate_tree.rows();
@@ -86,7 +96,7 @@ FinalResultMemoSave CbTreePricingMemoSave(const CbParas &cb_paras, const CdgPara
     auto calc_nxt_m = [&](double r_val, int m_val)
     {
       double miu_y = r_val - miu_y_second;
-      double miu_x = miu_y - cb_paras.sigma_V * cb_paras.rho *
+      double miu_x = miu_y - cdg_paras.sigma_v * cb_paras.rho *
                                  (vasciek_paras.kappa * (thetas(i - 1) - r_val)) /
                                  vasciek_paras.sigma_r;
       double x_val = x0 + m_val * jump;
@@ -99,7 +109,6 @@ FinalResultMemoSave CbTreePricingMemoSave(const CbParas &cb_paras, const CdgPara
     global_max_m = std::max(global_max_m, current_max_m);
   }
 
-  // Add a small safety buffer just in case of floating-point rounding quirks
   global_max_m += 5;
 
   // 2. Allocate the Global Lookup Matrix ONCE (Flattened 2D: [m][k])
@@ -140,7 +149,7 @@ FinalResultMemoSave CbTreePricingMemoSave(const CbParas &cb_paras, const CdgPara
                                vasciek_paras.sigma_r;
       const double miu_y = r_now - miu_y_second;
       const double miu_x =
-          miu_y - cb_paras.sigma_V * cb_paras.rho *
+          miu_y - cdg_paras.sigma_v * cb_paras.rho *
                       (vasciek_paras.kappa * (thetas(i - 1) - r_now)) /
                       vasciek_paras.sigma_r;
       const double expect_x = x_now + miu_x * dt;
@@ -162,6 +171,7 @@ FinalResultMemoSave CbTreePricingMemoSave(const CbParas &cb_paras, const CdgPara
         const int m_next = nxt_m + dm_vec[j];
         m_idx_offset = std::max(m_idx_offset, std::abs(m_next));
         const size_t k_next = pz_result.nxt_r_idx(k_now, j / 3);
+        // this condition means bankruptcy so no further transition is needed, we can skip this node
         if (l_min_now > 0)
         {
           continue;
@@ -202,10 +212,10 @@ FinalResultMemoSave CbTreePricingMemoSave(const CbParas &cb_paras, const CdgPara
       lookup_matrix[reset_idx] = -1;
     }
     tree_manager.append_tree(std::move(data_cur));
-    std::printf("Completed forward iteration %d, generated %zu nodes, m_idx_offset=%d\n", i, data_next.size(), m_idx_offset);
     std::swap(data_cur, data_next);
     data_next.clear();
   }
   tree_manager.append_tree(std::move(data_cur));
+  std::cout << "Completed tree construction and saving." << std::endl;
   return CbTreeBuildMemoSave(cb_paras, cdg_paras, vasciek_paras, tree_result, coupon_info, pz_result, m_idx_offset, tree_manager);
 }
