@@ -1,0 +1,30 @@
+class ParameterColumn {
+public:
+  static constexpr const char* Ticker = "Ticker";
+  static constexpr const char* T = "T";
+  static constexpr const char* F = "F";
+  static constexpr const char* rr = "rr";
+  static constexpr const char* CR = "CR";
+  static constexpr const char* NS = "NS";
+  static constexpr const char* NC = "NC";
+  static constexpr const char* CP = "CP";
+  static constexpr const char* rho = "rho";
+  static constexpr const char* coupon_rate = "coupon_rate";
+  static constexpr const char* dt_other = "dt_other";
+  static constexpr const char* paid_cycle = "paid_cycle";
+  static constexpr const char* lamda = "lamda";
+  static constexpr const char* phi = "phi";
+  static constexpr const char* l0 = "l0";
+  static constexpr const char* V0 = "V0";
+  static constexpr const char* delta = "delta";
+  static constexpr const char* sigma_v = "sigma_v";
+  static constexpr const char* v = "v";
+  static constexpr const char* kappa = "kappa";
+  static constexpr const char* r_bar = "r_bar";
+  static constexpr const char* sigma_r = "sigma_r";
+  static constexpr const char *r0 = "r0";
+  static constexpr const char *CallDate = "CallDate";
+  static constexpr const char *CallPrice = "CallPrice";
+  static constexpr const char *PricingDate = "date";
+  static constexpr const char *s0 = "s0";
+};
