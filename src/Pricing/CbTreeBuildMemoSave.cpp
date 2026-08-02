@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "..\Equity\EquityModel.h"
+#include "..\Util\MyLogger.hpp"
 #include "..\Util\Util.h"
 #include "..\Util\TreeManager.hpp"
 #include "..\Equity\EquityManager.hpp"
@@ -16,8 +17,8 @@
 /// @param vasciek_paras 
 /// @param tree_result 
 /// @param coupon_info this class determine which period has coupon paid, and the total steps of the tree
-/// @param pz_result 
-/// @param m_idx_offset 
+/// @param pz_result  See the PzTreeBuild.cpp
+/// @param m_idx_offset index offset for the m index (x tree), since the m index can be negative, we need to offset it to make it positive
 /// @param tree_manager 
 /// @return 
 FinalResultMemoSave CbTreeBuildMemoSave(
@@ -25,6 +26,8 @@ FinalResultMemoSave CbTreeBuildMemoSave(
     const VasciekParas &vasciek_paras, const HullWhiteTreeResult &tree_result,
     const CouponPaidInfo &coupon_info, const PzTreeResult &pz_result,
     const int m_idx_offset, TreeManager &tree_manager) {
+
+    MyLogger::Log("Starting backward induction for convertible bond pricing", MyLogger::LogLevel::INFO);
 
     // Prepare the tree manager for reading
     tree_manager.prepare_for_reading();
@@ -108,25 +111,23 @@ FinalResultMemoSave CbTreeBuildMemoSave(
         (cb_paras.CR * cb_paras.NC + cb_paras.NS); // diluted stock price if we do the conversion
     dil_s_next = convert.select(equity_next.min(diluted_stock_price), dil_s_next); // if we do the conversion, the diluted stock price is the minimum of the equity price and the diluted stock price
     cb_next = convert.select((dil_s_next * cb_paras.CR).max(cb_paras.F), cb_next);
-
     surv_next = is_pos.select(0.0, surv_next);
+
     Eigen::ArrayXd dm_vec(9);
     dm_vec << -2, 0, 2, -2, 0, 2, -2, 0, 2; // x tree transition
-
-    FinalResultMemoSave res;
 
     for (int i = n; i >= 1; --i)
     {
         const double dt = (i == 1) ? coupon_info.dt_first : cb_paras.dt_other;
         const double jump = (i == 1) ? jump_first : jump_other;
-        // company might have different call schedules at different periods, so we need to get the call price at each period
-        const double call_price = cb_paras.call_schedule.GetActiveCallOneTime(
-            coupon_info.dt_first + (i - 1) * cb_paras.dt_other
-        );
 
         const Eigen::ArrayX3d &prob_hw = (i == 1)
         ? tree_result.alpha_result.prob_first
         : tree_result.alpha_result.prob_other;
+
+        // Since dt is calculated based on the coupon payment schedule,
+        // we can calculate the current time in years based on the first coupon payment date and the time step for each period.
+        double current_time_in_year = coupon_info.dt_first + (i - 1) * cb_paras.dt_other; 
         
         int bool_flag = (i > 1) && coupon_info.is_coupon_paid[i - 1];
 
@@ -198,9 +199,9 @@ FinalResultMemoSave CbTreeBuildMemoSave(
                     double val_conv = (s_now * cb_paras.NS + cb_paras.NC * cb_paras.F) /
                                         (cb_paras.CR * cb_paras.NC + cb_paras.NS);
                     current_dil_s = std::min(s_now, val_conv);
-                    if (i == 1) res.convert_at_t0 = true;
                 }
-                // bankruptcy case, the company value is less than the debt, so the convertible bond price and vanilla bond price are both equal to the face value times the recovery rate
+                // bankruptcy case, the company value is less than the debt, so
+                // the convertible bond price and vanilla bond price are both equal to the face value times the recovery rate
                 if (!survival_flag)
                 {
                     cb_active(k, p) = cb_paras.F * cb_paras.rr;
@@ -276,24 +277,26 @@ FinalResultMemoSave CbTreeBuildMemoSave(
                     double prob = nxt_p[j];
                     cb_expected += cb_val * prob;
                     surv_expected += surv_val * prob;
-                    b_expected += b_val * prob; 
+                    b_expected += b_val * prob;
                 }
+                
                 cb_expected *= df;
                 b_expected *= df;
                 cb_expected += cb_paras.coupon_rate * cb_paras.F * bool_flag;
                 double conversion_val = current_dil_s * cb_paras.CR;
                 double final_cb = cb_expected;
-                // company would call the convertible bond if the call price is less than the convertible bond price, so we need to take the minimum of the two
-                if (final_cb > call_price)
-                    final_cb = call_price;
-                if (final_cb < conversion_val)
+
+                final_cb = cb_paras.call_schedule.CheckIfExcerciseOneTime(current_time_in_year, final_cb);
+
+                if (final_cb < conversion_val) {
                     final_cb = conversion_val;
+                }
+
                 surv_active(k, p) = surv_expected;
                 cb_active(k, p) = final_cb;
                 b_active(k, p) = b_expected;
             }
         }
-        std::cout << "Completed period in backward induction: " << i << "\n";
         cb_now.swap(cb_next);
         surv_now.swap(surv_next);
         b_now.swap(b_next);
@@ -302,9 +305,8 @@ FinalResultMemoSave CbTreeBuildMemoSave(
         map_now.swap(map_next);
         map_now.setConstant(-1);
     }
+    
     tree_manager.close();
-    res.cb_price = cb_next(0, 0);
-    res.default_prob = 1.0 - surv_next(0, 0);
-    res.zcb_price = b_next(0, 0);
-    return res;
+    MyLogger::Log("Completed backward induction for convertible bond pricing", MyLogger::LogLevel::INFO);
+    return {.cb_price = cb_next(0, 0), .default_prob = 1.0 - surv_next(0, 0), .zcb_price = b_next(0, 0)};
 }

@@ -23,8 +23,9 @@ public:
   static constexpr const char* r_bar = "r_bar";
   static constexpr const char* sigma_r = "sigma_r";
   static constexpr const char *r0 = "r0";
-  static constexpr const char *CallDate = "CallDate";
-  static constexpr const char *CallPrice = "CallPrice";
+  static constexpr const char* Type = "Type";
+  static constexpr const char *CallDate = "Date";
+  static constexpr const char *CallPrice = "Price";
   static constexpr const char *PricingDate = "date";
   static constexpr const char *s0 = "s0";
 };
