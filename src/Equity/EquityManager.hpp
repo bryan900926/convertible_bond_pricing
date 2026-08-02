@@ -348,25 +348,26 @@ public:
         int_p2.setZero();
         int_act.setZero();
 
-        for (int i = 0; i < gh_rule_.x.size(); ++i)
+        Eigen::ArrayXd final_mult = (pt_act * v_act) / cb_.NS * INV_SQRT_PI;
+        #pragma omp parallel for
+        for (int j = 0; j < cb_.partition; ++j)
         {
-            const double z = gh_rule_.x(i) * SQRT_2;
-            const double w = gh_rule_.w(i);
+            // 1. Accumulate the Gauss-Hermite integration for THIS COLUMN only
+            for (int i = 0; i < gh_rule_.x.size(); ++i)
+            {
+                const double z = gh_rule_.x(i) * SQRT_2;
+                const double w = gh_rule_.w(i);
 
-            // 1. Calculate the SCALAR exponentials (extremely fast)
-            double scalar_d1_z = std::exp(-1.702 * d1_sign_h * z);
-            double scalar_d2_z = std::exp(-1.702 * d2_sign_h * z);
-            double scalar_exp_z = std::exp(c_yy_sqrt * z);
+                double scalar_d1_z = std::exp(-1.702 * d1_sign_h * z);
+                double scalar_d2_z = std::exp(-1.702 * d2_sign_h * z);
+                double scalar_exp_z = std::exp(c_yy_sqrt * z);
 
-            // 2. Multiply the pre-calculated matrix by the scalar, and add 1.0
-            // Notice: NO .exp() ON MATRICES INSIDE THE LOOP!
-            // d1_act = (1.0 + (exp_base_d1 * scalar_d1_z)).inverse();
-            // d2_act = (1.0 + (exp_base_d2 * scalar_d2_z)).inverse();
+                int_p1.col(j) += w * (1.0 + (exp_base_d1.col(j) * scalar_d1_z)).inverse();
+                int_p2.col(j) += (w * scalar_exp_z) * (1.0 + (exp_base_d2.col(j) * scalar_d2_z)).inverse();
+            }
 
-            int_p1 += w * (1.0 + (exp_base_d1 * scalar_d1_z)).inverse();
-            int_p2 += (w * scalar_exp_z) * (1.0 + (exp_base_d2 * scalar_d2_z)).inverse();
+            int_act.col(j) = (int_p1.col(j) * e1_act.col(j)) - (int_p2.col(j) * e2_act.col(j));
+            res_act.col(j) = int_act.col(j) * final_mult;
         }
-        int_act = (int_p1 * e1_act) - (int_p2 * e2_act);
-        equity_result = int_act.colwise() * ((pt_act * v_act) / cb_.NS * INV_SQRT_PI);
     }
 };
