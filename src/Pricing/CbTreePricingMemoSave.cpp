@@ -3,6 +3,7 @@
 #include "..\Util\Util.h"
 #include "..\Util\TreeManager.hpp"
 #include "CbModel.h"
+#include "..\Util\MyLogger.hpp" 
 
 #include <cmath>
 #include <cstddef>
@@ -17,9 +18,11 @@
 /// @param vasciek_paras parameters for Vasciek model
 /// @param ticker the ticker of the convertible bond, used to save the leverage tree to a file
 /// @return
-FinalResultMemoSave CbTreePricingMemoSave(const CbParas &cb_paras, const CdgParas &cdg_paras,
-                   const VasciekParas& vasciek_paras, const std::string& ticker)
-{
+FinalResultMemoSave CbTreePricingMemoSave(const CbParas &cb_paras,
+                                          const CdgParas &cdg_paras,
+                                          const VasciekParas &vasciek_paras,
+                                          const std::string &ticker) {
+  MyLogger::Log("Starting Forward Pricing for ticker: " + ticker, MyLogger::LogLevel::INFO);
   CouponPaidInfo coupon_info =
       CouponPaidCalc(cb_paras.T, cb_paras.dt_other, cb_paras.paid_cycle);
   int n = coupon_info.total_steps;
@@ -45,6 +48,7 @@ FinalResultMemoSave CbTreePricingMemoSave(const CbParas &cb_paras, const CdgPara
       cdg_paras.sigma_v * std::sqrt(1 - cb_paras.rho * cb_paras.rho);
   const double jump_first = sigma_x * std::sqrt(coupon_info.dt_first);
   const double jump_other = sigma_x * std::sqrt(cb_paras.dt_other);
+
   if (cb_paras.if_const_r) {
     tree_result.short_rate_tree = Eigen::ArrayXXd::Constant(
         tree_result.short_rate_tree.rows(), tree_result.short_rate_tree.cols(),
@@ -76,6 +80,7 @@ FinalResultMemoSave CbTreePricingMemoSave(const CbParas &cb_paras, const CdgPara
 
   const double miu_y_second =
       cdg_paras.delta + cdg_paras.sigma_v * cdg_paras.sigma_v / 2;
+  
   int m_idx_offset = 0;
 
   // We encountered the memory issue when the tree size is too large, so we need to save the tree to a file and read it back when needed.
@@ -169,8 +174,11 @@ FinalResultMemoSave CbTreePricingMemoSave(const CbParas &cb_paras, const CdgPara
       for (int j = 0; j < 9; ++j)
       {
         const int m_next = nxt_m + dm_vec[j];
+
         m_idx_offset = std::max(m_idx_offset, std::abs(m_next));
+
         const size_t k_next = pz_result.nxt_r_idx(k_now, j / 3);
+        
         // this condition means bankruptcy so no further transition is needed, we can skip this node
         if (l_min_now > 0)
         {
@@ -216,6 +224,6 @@ FinalResultMemoSave CbTreePricingMemoSave(const CbParas &cb_paras, const CdgPara
     data_next.clear();
   }
   tree_manager.append_tree(std::move(data_cur));
-  std::cout << "Completed tree construction and saving." << std::endl;
+  MyLogger::Log("Completed tree construction and saving for ticker: " + ticker, MyLogger::LogLevel::INFO);
   return CbTreeBuildMemoSave(cb_paras, cdg_paras, vasciek_paras, tree_result, coupon_info, pz_result, m_idx_offset, tree_manager);
 }

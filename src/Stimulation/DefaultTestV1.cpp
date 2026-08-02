@@ -36,6 +36,9 @@ DefaultTestV1Result DefaultTestV1(const CbParas &cb_paras,
 
     double total_default_periods = 0.0;
 
+    std::vector<double> global_lbar_sum(n + 1, 0.0);
+    std::vector<int> global_lbar_count(n + 1, 0);
+
     for (int rep_idx = 0; rep_idx < rep; ++rep_idx) {
         int default_count = 0;
         double sum_of_default_periods_iter = 0;
@@ -70,7 +73,7 @@ DefaultTestV1Result DefaultTestV1(const CbParas &cb_paras,
                                 vasciek_paras.sigma_r;
                 const double miu_y = r_now - miu_y_second;
                 const double miu_x =
-                    miu_y - cb_paras.sigma_V * cb_paras.rho *
+                    miu_y - cdg_paras.sigma_v * cb_paras.rho *
                                 (vasciek_paras.kappa * (thetas(t - 1) - r_now)) /
                                 vasciek_paras.sigma_r;
                 const double expect_x = x_now + miu_x * dt;
@@ -109,6 +112,10 @@ DefaultTestV1Result DefaultTestV1(const CbParas &cb_paras,
                     cdg_paras.sigma_v * cb_paras.rho *
                         (tree_result.short_rate_tree(k_now, t) - vasciek_paras.r0) /
                         vasciek_paras.sigma_r;
+
+                global_lbar_sum[t] += l_hat;
+                global_lbar_count[t]++;
+
                 l_now = l_now + (l_hat - l_now) * dt * cdg_paras.lamda -
                         (y_nxt - y_now - miu_y * dt);
                 if (l_now > 0) {
@@ -125,5 +132,16 @@ DefaultTestV1Result DefaultTestV1(const CbParas &cb_paras,
         static_cast<double>(default_count) / num_stimulations;
     sum_of_default_probabilities += default_probability;
     }
-  return {sum_of_default_probabilities / rep, total_default_periods / rep};
+    // std::ofstream out_file("l_bar_trend_over_time.csv");
+    // out_file << "time_step,avg_l_bar,surviving_paths\n";
+    // for (int t = 1; t <= n; ++t)
+    // {
+    //     if (global_lbar_count[t] > 0)
+    //     {
+    //         double avg_l_bar_at_t = global_lbar_sum[t] / global_lbar_count[t];
+    //         out_file << t << "," << avg_l_bar_at_t << "," << global_lbar_count[t] << "\n";
+    //     }
+    // }
+    // out_file.close();
+    return {sum_of_default_probabilities / rep, total_default_periods / rep};
 }

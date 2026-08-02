@@ -1,6 +1,6 @@
 #include <Eigen/Dense>
-#include <iostream>
 #include "HullWhiteModel.h"
+
 /// @brief This function builds the PzTreeResult from the HullWhiteTreeResult. 
 /// It constructs the next index tree (nxt_idx) based on the short rate tree and the maximum jump indices (j_max_other). 
 /// The function also identifies the starting index (start_h) for the short rate tree.

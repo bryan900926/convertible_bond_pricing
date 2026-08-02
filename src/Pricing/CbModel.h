@@ -5,17 +5,20 @@
 
 #include "..\HullWhiteModel\HullWhiteModel.h"
 
-class CallInfo {
+class ScheduleInfo {
 public:
-  double call_price;
+  enum class ScheduleType { Call, Put };
+  double price;
   double digit_date; // days from pricing date, to be calculated during initialization
   std::string date_str;
-  CallInfo(const std::string& date_str, double call_price)
-      : date_str(date_str), call_price(call_price) {}
+  ScheduleType type;
+
+  ScheduleInfo(const std::string& date_str, double price, ScheduleType type)
+      : date_str(date_str), price(price), type(type) {}
 };
 
 class CallSchedule {
-    std::vector<CallInfo> _call_infos;
+    std::vector<ScheduleInfo> _infos;
     int _current_index = 0;
     std::string _pricing_date;
     // Helper to convert "YYYY-MM-DD" strings into exact day differences
@@ -31,51 +34,45 @@ class CallSchedule {
 
         return (target_sys - start_sys).count() / 365.0; // Convert days to years
     }
-    CallSchedule(const std::vector<CallInfo>& calls, const std::string& pricing_date)
-        : _call_infos(calls), _pricing_date(pricing_date) {
+    CallSchedule(const std::vector<ScheduleInfo>& schedules, const std::string& pricing_date)
+        : _infos(schedules), _pricing_date(pricing_date) {
     }
 public:
-    static CallSchedule Create(const std::vector<CallInfo>& calls, const std::string& pricing_date) {
-        std::vector<CallInfo> mutable_calls;
-        
-        for (auto& call : mutable_calls) {
-          call.digit_date = CalculateDaysBetween(pricing_date, call.date_str);
-          // filter out calls that are after the pricing date
-          if (call.digit_date >= 0) {
-              mutable_calls.push_back(call);
+    static CallSchedule Create(const std::vector<ScheduleInfo>& schedules, const std::string& pricing_date) {
+        std::vector<ScheduleInfo> mutable_schedules = schedules;
+
+        for (auto& schedule : mutable_schedules) {
+            schedule.digit_date = CalculateDaysBetween(pricing_date, schedule.date_str);
+            // filter out schedules that are after the pricing date
+            if (schedule.digit_date >= 0) {
+              mutable_schedules.push_back(schedule);
           }
         }
-        std::sort(mutable_calls.begin(), mutable_calls.end(), 
-            [](const CallInfo& a, const CallInfo& b) {
+        std::sort(mutable_schedules.begin(), mutable_schedules.end(), 
+            [](const ScheduleInfo& a, const ScheduleInfo& b) {
                 return a.digit_date < b.digit_date;
             });
 
-        return CallSchedule(std::move(mutable_calls), pricing_date); 
+        return CallSchedule(std::move(mutable_schedules), pricing_date); 
     }
-    /// @brief This method assume company can call multiple times, and return the latest call price if the current time is after the call date
-    /// @param current_time_in_days 
-    /// @return 
-    double GetActiveCallPrice(double current_time_in_days) const {
-        
-        double active_price = std::numeric_limits<double>::max();
-
-        for (const auto& call : _call_infos) {
-            if (current_time_in_days >= call.digit_date) {
-                active_price = call.call_price;
-            } 
+    /// @brief This method assume investor can only excercise the option once
+    /// @param current_time_in_years
+    /// @return
+    double CheckIfExcerciseOneTime(double current_time_in_years, double current_cb_value) {
+        if (_current_index < _infos.size() && current_time_in_years >= _infos[_current_index].digit_date) {
+          double active_price = _infos[_current_index].price;
+          ScheduleInfo::ScheduleType type = _infos[_current_index].type;
+          if (type == ScheduleInfo::ScheduleType::Call && current_cb_value > active_price) {
+              return active_price;
+          } else if (type == ScheduleInfo::ScheduleType::Put && current_cb_value < active_price) {
+              return active_price;
+          }
+          _current_index++; // Move to the next schedule for future scheduling
         }
-        return active_price;
-    }
-    /// @brief This method assume investor can only call once
-    /// @param current_time_in_days 
-    /// @return 
-    double GetActiveCallOneTime(double current_time_in_days) {
-        if (_current_index < _call_infos.size() && current_time_in_days >= _call_infos[_current_index].digit_date) {
-            return _call_infos[_current_index++].call_price;
-        }
-        return std::numeric_limits<double>::max();
+        return current_cb_value;
     }
 };
+
 struct CbParas {
   double T;
   double F;
@@ -156,7 +153,6 @@ struct FinalResultMemoSave {
   double cb_price;
   double default_prob;
   double zcb_price;
-  bool convert_at_t0;
 };
 
 CouponPaidInfo CouponPaidCalc(const double T, const double dt,
@@ -169,14 +165,6 @@ FinalResultMemoSave CbTreePricingMemoSave(const CbParas &cb_paras, const CdgPara
                    const VasciekParas& vasciek_paras, const std::string& ticker);
 
 struct EquityTreeBuildResult;
-
-FinalResult CbTreeBuildV2(const CbParas &cb_paras, const CdgParas &cdg_paras,
-                          const VasciekParas &vasciek_paras,
-                          const EquityTreeBuildResult &equity_tree_result,
-                          const HullWhiteTreeResult &tree_result,
-                          const CouponPaidInfo &coupon_info,
-                          const PzTreeResult &pz_result,
-                          const std::vector<int> &num_node_steps);
 
 class TreeManager;
 

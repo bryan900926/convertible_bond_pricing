@@ -4,7 +4,6 @@
 #include <float.h>
 #include <rapidcsv.h>
 #include "src/Util/ParameterLoader.hpp"
-#include "src/Pricing/PricingEngine.hpp"
 
 void crash_handler(int signal_number)
 {
@@ -18,7 +17,6 @@ void crash_handler(int signal_number)
     std::exit(signal_number);
 }
 
-// args : ticker
 int main(int argc, char **argv)
 {
     signal(SIGSEGV, crash_handler); // Memory violations
@@ -27,23 +25,8 @@ int main(int argc, char **argv)
     signal(SIGILL, crash_handler);  // Illegal instructions
 
     ParameterLoader<FinalResultMemoSave> loader = ParameterLoader<FinalResultMemoSave>::StartLoadParams(
-        "LAB", "D:\\Users\\YYLee\\cb_cpp\\para_test.csv", "D:\\Users\\YYLee\\cb_cpp\\call_para.csv");
-    loader.Save("D:\\Users\\YYLee\\cb_cpp\\result.csv", ParameterLoader<FinalResultMemoSave>::FileMode::Overwrite);
+        "LAB", "D:\\Users\\YYLee\\cb_cpp\\para_test.csv", "D:\\Users\\YYLee\\cb_cpp\\schedule_para.csv");
+    loader.Pricing("D:\\Users\\YYLee\\cb_cpp\\result.csv", ParameterLoader<FinalResultMemoSave>::FileMode::Overwrite);
     return 0;
-}
-void test_eigen_array_addition() {
-    Eigen::ArrayXXd a(10000000, 20);
-    Eigen::ArrayXXd b(10000000, 20);
-    for (int i = 0; i < 20; ++i) {
-      a += b;
-    }
-}
-void test_eigen_array_addtion_openmp() {
-    Eigen::ArrayXXd a(10000000, 20);
-    Eigen::ArrayXXd b(10000000, 20);
-    #pragma omp parallel for
-    for (int i = 0; i < 20; ++i) {
-      a += b;
-    }
 }
 

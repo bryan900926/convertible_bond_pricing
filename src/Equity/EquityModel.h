@@ -18,13 +18,12 @@ struct GaussHermiteResult
 
 GaussHermiteResult compute_gauss_hermite_rule(int n);
 
-double CalculateEquityNode(
-    double v_t, double l_t, double r_t, double dt,
-    double theta_t, double theta_t1,
-    const CbParas &cb_paras,
-    const CdgParas &cdg_paras,
-    const VasciekParas &vp,
-    const GaussHermiteResult &gh_rule);
+double CalculateEquityNode(double v_t, double l_t, double r_t, double dt,
+                           double theta_t, double theta_t1,
+                           const CbParas &cb_paras, const CdgParas &cdg_paras,
+                           const VasciekParas &vp,
+                           const GaussHermiteResult &gh_rule);
+
 struct EquityContext
 {
     const double c_xx;
